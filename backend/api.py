@@ -45,6 +45,9 @@ CORS(app, resources={
 BASE_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = BASE_DIR / "frontend"
 DATASET_PATH = Path(__file__).resolve().parent / "outputs" / "final_dataset.csv"
+DEMO_ASSETS_DIR = Path(__file__).resolve().parent / "demo_assets"
+DEMO_OVERLAYS_DIR = DEMO_ASSETS_DIR / "overlays"
+DEMO_OVERLAY_INDEX_PATH = DEMO_ASSETS_DIR / "overlay-index.json"
 FIRECCI_DIR = BASE_DIR / "data" / "firecci"
 TEMPERATURE_DIR = BASE_DIR / "data" / "ERA5_Temperature"
 AOD_DIR = BASE_DIR / "data" / "AOD_Exports"
@@ -106,6 +109,15 @@ def load_dataset():
     print("Dataset columns:", dataset.columns.tolist())
     print(dataset.head())
     return dataset
+
+
+@lru_cache(maxsize=1)
+def load_demo_overlay_index():
+    if not DEMO_OVERLAY_INDEX_PATH.exists():
+        return {}
+
+    with DEMO_OVERLAY_INDEX_PATH.open("r", encoding="utf-8") as file:
+        return json.load(file)
 
 
 def serialize_records(frame: pd.DataFrame, aggregation: str = "monthly"):
@@ -608,6 +620,75 @@ def get_lake_cci_legend(variable_name: str):
         }
 
     return None
+
+
+def get_month_key(date_value) -> str | None:
+    if date_value is None:
+        return None
+
+    try:
+        return pd.to_datetime(date_value).to_period("M").strftime("%Y-%m")
+    except (TypeError, ValueError):
+        return None
+
+
+def build_month_candidates(start_date: str, end_date: str):
+    start_month = get_month_key(start_date)
+    end_month = get_month_key(end_date)
+
+    if not start_month:
+        return []
+
+    start_timestamp = pd.to_datetime(start_month)
+    end_timestamp = pd.to_datetime(end_month) if end_month else start_timestamp
+    month_range = pd.date_range(start=start_timestamp, end=end_timestamp, freq="MS")
+    candidates = [month.strftime("%Y-%m") for month in month_range]
+
+    if start_month not in candidates:
+        candidates.insert(0, start_month)
+
+    return candidates
+
+
+def absolutize_overlay_payload(payload):
+    if not payload:
+        return None
+
+    normalized = dict(payload)
+    image_url = normalized.get("image_url")
+    if image_url and image_url.startswith("/"):
+        normalized["image_url"] = request.host_url.rstrip("/") + image_url
+    return normalized
+
+
+def resolve_overlay_from_demo_manifest(section_name: str, variable_name: str, entity_id: str | None, start_date: str, end_date: str):
+    if not entity_id:
+        return None
+
+    manifest = load_demo_overlay_index()
+    section = manifest.get(section_name, {})
+    variable_entries = section.get(variable_name, {})
+    month_entries = variable_entries.get(str(entity_id))
+
+    if not month_entries:
+        return None
+
+    month_candidates = build_month_candidates(start_date, end_date)
+    for month_key in month_candidates:
+        if month_key in month_entries:
+            return absolutize_overlay_payload(month_entries[month_key])
+
+    available_months = sorted(month_entries.keys())
+    if not available_months:
+        return None
+
+    target_month = month_candidates[0] if month_candidates else available_months[0]
+    target_timestamp = pd.to_datetime(target_month)
+    fallback_month = min(
+        available_months,
+        key=lambda month_key: abs((pd.to_datetime(month_key) - target_timestamp).days)
+    )
+    return absolutize_overlay_payload(month_entries[fallback_month])
 
 
 def get_burned_overlay_paths(catchment_id: str, start_date: str, end_date: str):
@@ -1554,6 +1635,8 @@ def should_serve_frontend():
 
 @app.route("/overlays/<path:filename>", methods=["GET"])
 def serve_overlay(filename: str):
+    if (DEMO_OVERLAYS_DIR / filename).exists():
+        return send_from_directory(DEMO_OVERLAYS_DIR, filename)
     if (OVERLAY_DIR / filename).exists():
         return send_from_directory(OVERLAY_DIR, filename)
     if (LAKE_CCI_OVERLAY_DIR / filename).exists():
@@ -1679,70 +1762,76 @@ def query_data():
             analysis_records = pd.DataFrame([build_safe_analysis_record(requested_id, start_date)])
 
         try:
-            overlay = build_burned_area_overlay(
+            overlay = resolve_overlay_from_demo_manifest(
+                "catchment_overlays",
+                "burned_area",
                 requested_id,
                 start_date,
                 end_date
             ) if "burned_area" in selected_variables else None
         except Exception as error:
-            app.logger.warning("Burned overlay build failed for catchment=%s: %s", requested_id, error)
+            app.logger.warning("Burned overlay resolution failed for catchment=%s: %s", requested_id, error)
             overlay = None
         print(f"[analysis] catchment_id={requested_id} overlay_response={overlay}")
 
         try:
-            temperature_overlay = build_temperature_overlay(
+            temperature_overlay = resolve_overlay_from_demo_manifest(
+                "catchment_overlays",
+                "temperature",
                 requested_id,
                 start_date,
                 end_date
             ) if "temperature" in selected_variables else None
         except Exception as error:
-            app.logger.warning("Temperature overlay build failed for catchment=%s: %s", requested_id, error)
+            app.logger.warning("Temperature overlay resolution failed for catchment=%s: %s", requested_id, error)
             temperature_overlay = None
 
         try:
-            aod_overlay = build_aod_overlay(
+            aod_overlay = resolve_overlay_from_demo_manifest(
+                "catchment_overlays",
+                "aod",
                 requested_id,
                 start_date,
                 end_date
             ) if "aod" in selected_variables else None
         except Exception as error:
-            app.logger.warning("AOD overlay build failed for catchment=%s: %s", requested_id, error)
+            app.logger.warning("AOD overlay resolution failed for catchment=%s: %s", requested_id, error)
             aod_overlay = None
 
         try:
-            chla_overlay = build_lake_cci_overlay(
-                requested_lake_id,
+            chla_overlay = resolve_overlay_from_demo_manifest(
+                "lake_overlays",
                 "chla",
+                requested_lake_id,
                 start_date,
-                end_date,
-                analysis_records
+                end_date
             ) if "chla" in selected_variables else None
         except Exception as error:
-            app.logger.warning("CHLA overlay build failed for lake=%s: %s", requested_lake_id, error)
+            app.logger.warning("CHLA overlay resolution failed for lake=%s: %s", requested_lake_id, error)
             chla_overlay = None
 
         try:
-            lswt_overlay = build_lake_cci_overlay(
-                requested_lake_id,
+            lswt_overlay = resolve_overlay_from_demo_manifest(
+                "lake_overlays",
                 "lake_surface_water_temperature",
+                requested_lake_id,
                 start_date,
-                end_date,
-                analysis_records
+                end_date
             ) if "lake_surface_water_temperature" in selected_variables else None
         except Exception as error:
-            app.logger.warning("LSWT overlay build failed for lake=%s: %s", requested_lake_id, error)
+            app.logger.warning("LSWT overlay resolution failed for lake=%s: %s", requested_lake_id, error)
             lswt_overlay = None
 
         try:
-            tsm_overlay = build_lake_cci_overlay(
-                requested_lake_id,
+            tsm_overlay = resolve_overlay_from_demo_manifest(
+                "lake_overlays",
                 "tsm",
+                requested_lake_id,
                 start_date,
-                end_date,
-                analysis_records
+                end_date
             ) if "tsm" in selected_variables else None
         except Exception as error:
-            app.logger.warning("TSM overlay build failed for lake=%s: %s", requested_lake_id, error)
+            app.logger.warning("TSM overlay resolution failed for lake=%s: %s", requested_lake_id, error)
             tsm_overlay = None
 
         try:
