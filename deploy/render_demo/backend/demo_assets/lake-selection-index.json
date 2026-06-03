@@ -1,0 +1,357 @@
+{
+  "1075": {
+    "lake_id": "1075",
+    "catchment_id": "541",
+    "lake_label": "Lake 1075"
+  },
+  "127": {
+    "lake_id": "127",
+    "catchment_id": "457",
+    "lake_label": "Lake 127"
+  },
+  "137": {
+    "lake_id": "137",
+    "catchment_id": "999",
+    "lake_label": "Lake 137"
+  },
+  "1375": {
+    "lake_id": "1375",
+    "catchment_id": "519",
+    "lake_label": "Lake 1375"
+  },
+  "1425": {
+    "lake_id": "1425",
+    "catchment_id": "470",
+    "lake_label": "Lake 1425"
+  },
+  "1510": {
+    "lake_id": "1510",
+    "catchment_id": "530",
+    "lake_label": "Lake 1510"
+  },
+  "1547": {
+    "lake_id": "1547",
+    "catchment_id": "512",
+    "lake_label": "Lake 1547"
+  },
+  "1594": {
+    "lake_id": "1594",
+    "catchment_id": "503",
+    "lake_label": "Lake 1594"
+  },
+  "1640": {
+    "lake_id": "1640",
+    "catchment_id": "1036",
+    "lake_label": "Lake 1640"
+  },
+  "1676": {
+    "lake_id": "1676",
+    "catchment_id": "485",
+    "lake_label": "Lake 1676"
+  },
+  "1908": {
+    "lake_id": "1908",
+    "catchment_id": "580",
+    "lake_label": "Lake 1908"
+  },
+  "1945": {
+    "lake_id": "1945",
+    "catchment_id": "572",
+    "lake_label": "Lake 1945"
+  },
+  "222": {
+    "lake_id": "222",
+    "catchment_id": "478",
+    "lake_label": "Lake 222"
+  },
+  "2263": {
+    "lake_id": "2263",
+    "catchment_id": "563",
+    "lake_label": "Lake 2263"
+  },
+  "23": {
+    "lake_id": "23",
+    "catchment_id": "996",
+    "lake_label": "Lake 23"
+  },
+  "2368": {
+    "lake_id": "2368",
+    "catchment_id": "583",
+    "lake_label": "Lake 2368"
+  },
+  "2418": {
+    "lake_id": "2418",
+    "catchment_id": "595",
+    "lake_label": "Lake 2418"
+  },
+  "2420": {
+    "lake_id": "2420",
+    "catchment_id": "578",
+    "lake_label": "Lake 2420"
+  },
+  "2436": {
+    "lake_id": "2436",
+    "catchment_id": "575",
+    "lake_label": "Lake 2436"
+  },
+  "2544": {
+    "lake_id": "2544",
+    "catchment_id": "606",
+    "lake_label": "Lake 2544"
+  },
+  "2560": {
+    "lake_id": "2560",
+    "catchment_id": "596",
+    "lake_label": "Lake 2560"
+  },
+  "2594": {
+    "lake_id": "2594",
+    "catchment_id": "597",
+    "lake_label": "Lake 2594"
+  },
+  "2595": {
+    "lake_id": "2595",
+    "catchment_id": "589",
+    "lake_label": "Lake 2595"
+  },
+  "2709": {
+    "lake_id": "2709",
+    "catchment_id": "569",
+    "lake_label": "Lake 2709"
+  },
+  "28": {
+    "lake_id": "28",
+    "catchment_id": "456",
+    "lake_label": "Lake 28"
+  },
+  "281": {
+    "lake_id": "281",
+    "catchment_id": "494",
+    "lake_label": "Lake 281"
+  },
+  "292": {
+    "lake_id": "292",
+    "catchment_id": "1030",
+    "lake_label": "Lake 292"
+  },
+  "2944": {
+    "lake_id": "2944",
+    "catchment_id": "603",
+    "lake_label": "Lake 2944"
+  },
+  "300000428": {
+    "lake_id": "300000428",
+    "catchment_id": "1035",
+    "lake_label": "Lake 300000428"
+  },
+  "300004897": {
+    "lake_id": "300004897",
+    "catchment_id": "1090",
+    "lake_label": "Lake 300004897"
+  },
+  "300004906": {
+    "lake_id": "300004906",
+    "catchment_id": "1089",
+    "lake_label": "Lake 300004906"
+  },
+  "300004989": {
+    "lake_id": "300004989",
+    "catchment_id": "1091",
+    "lake_label": "Lake 300004989"
+  },
+  "300005336": {
+    "lake_id": "300005336",
+    "catchment_id": "1097",
+    "lake_label": "Lake 300005336"
+  },
+  "300005345": {
+    "lake_id": "300005345",
+    "catchment_id": "1098",
+    "lake_label": "Lake 300005345"
+  },
+  "300005364": {
+    "lake_id": "300005364",
+    "catchment_id": "1099",
+    "lake_label": "Lake 300005364"
+  },
+  "300005860": {
+    "lake_id": "300005860",
+    "catchment_id": "560",
+    "lake_label": "Lake 300005860"
+  },
+  "300005962": {
+    "lake_id": "300005962",
+    "catchment_id": "561",
+    "lake_label": "Lake 300005962"
+  },
+  "300006033": {
+    "lake_id": "300006033",
+    "catchment_id": "568",
+    "lake_label": "Lake 300006033"
+  },
+  "300006490": {
+    "lake_id": "300006490",
+    "catchment_id": "584",
+    "lake_label": "Lake 300006490"
+  },
+  "300006797": {
+    "lake_id": "300006797",
+    "catchment_id": "594",
+    "lake_label": "Lake 300006797"
+  },
+  "300007453": {
+    "lake_id": "300007453",
+    "catchment_id": "613",
+    "lake_label": "Lake 300007453"
+  },
+  "3079": {
+    "lake_id": "3079",
+    "catchment_id": "555",
+    "lake_label": "Lake 3079"
+  },
+  "313": {
+    "lake_id": "313",
+    "catchment_id": "1031",
+    "lake_label": "Lake 313"
+  },
+  "323": {
+    "lake_id": "323",
+    "catchment_id": "479",
+    "lake_label": "Lake 323"
+  },
+  "3243": {
+    "lake_id": "3243",
+    "catchment_id": "588",
+    "lake_label": "Lake 3243"
+  },
+  "326": {
+    "lake_id": "326",
+    "catchment_id": "491",
+    "lake_label": "Lake 326"
+  },
+  "333": {
+    "lake_id": "333",
+    "catchment_id": "1034",
+    "lake_label": "Lake 333"
+  },
+  "3604": {
+    "lake_id": "3604",
+    "catchment_id": "604",
+    "lake_label": "Lake 3604"
+  },
+  "391": {
+    "lake_id": "391",
+    "catchment_id": "477",
+    "lake_label": "Lake 391"
+  },
+  "402": {
+    "lake_id": "402",
+    "catchment_id": "535",
+    "lake_label": "Lake 402"
+  },
+  "404": {
+    "lake_id": "404",
+    "catchment_id": "475",
+    "lake_label": "Lake 404"
+  },
+  "405": {
+    "lake_id": "405",
+    "catchment_id": "500",
+    "lake_label": "Lake 405"
+  },
+  "409": {
+    "lake_id": "409",
+    "catchment_id": "490",
+    "lake_label": "Lake 409"
+  },
+  "451": {
+    "lake_id": "451",
+    "catchment_id": "486",
+    "lake_label": "Lake 451"
+  },
+  "474": {
+    "lake_id": "474",
+    "catchment_id": "480",
+    "lake_label": "Lake 474"
+  },
+  "508": {
+    "lake_id": "508",
+    "catchment_id": "497",
+    "lake_label": "Lake 508"
+  },
+  "514": {
+    "lake_id": "514",
+    "catchment_id": "1032",
+    "lake_label": "Lake 514"
+  },
+  "558": {
+    "lake_id": "558",
+    "catchment_id": "796",
+    "lake_label": "Lake 558"
+  },
+  "566": {
+    "lake_id": "566",
+    "catchment_id": "501",
+    "lake_label": "Lake 566"
+  },
+  "672": {
+    "lake_id": "672",
+    "catchment_id": "493",
+    "lake_label": "Lake 672"
+  },
+  "68": {
+    "lake_id": "68",
+    "catchment_id": "454",
+    "lake_label": "Lake 68"
+  },
+  "713": {
+    "lake_id": "713",
+    "catchment_id": "521",
+    "lake_label": "Lake 713"
+  },
+  "730": {
+    "lake_id": "730",
+    "catchment_id": "531",
+    "lake_label": "Lake 730"
+  },
+  "754": {
+    "lake_id": "754",
+    "catchment_id": "516",
+    "lake_label": "Lake 754"
+  },
+  "771": {
+    "lake_id": "771",
+    "catchment_id": "470",
+    "lake_label": "Lake 771"
+  },
+  "779": {
+    "lake_id": "779",
+    "catchment_id": "488",
+    "lake_label": "Lake 779"
+  },
+  "782": {
+    "lake_id": "782",
+    "catchment_id": "1038",
+    "lake_label": "Lake 782"
+  },
+  "810": {
+    "lake_id": "810",
+    "catchment_id": "483",
+    "lake_label": "Lake 810"
+  },
+  "908": {
+    "lake_id": "908",
+    "catchment_id": "472",
+    "lake_label": "Lake 908"
+  },
+  "910": {
+    "lake_id": "910",
+    "catchment_id": "482",
+    "lake_label": "Lake 910"
+  },
+  "949": {
+    "lake_id": "949",
+    "catchment_id": "516",
+    "lake_label": "Lake 949"
+  }
+}

@@ -2,6 +2,7 @@ services:
   - type: web
     name: geoinformatics-proj
     env: python
+    rootDir: deploy/render_demo
     buildCommand: pip install -r backend/requirements.txt
     startCommand: gunicorn --chdir backend api:app --bind 0.0.0.0:$PORT
     envVars:

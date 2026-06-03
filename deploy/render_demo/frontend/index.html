@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoScope Analytics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap"
+        rel="stylesheet"
+    >
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin=""
+    >
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-shell">
+        <div id="map"></div>
+
+        <header class="app-brand glass-panel" aria-label="GeoScope Analytics">
+            <img class="brand-logo" src="assets/logo.png" alt="GeoScope Analytics logo">
+        </header>
+
+        <aside id="control-panel" class="control-panel glass-panel" aria-expanded="true">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <span class="panel-kicker">Controls</span>
+                    <h2>Analysis Controls</h2>
+                </div>
+                <button id="toggle-controls" class="panel-toggle-button" type="button" aria-expanded="true">Hide</button>
+            </div>
+
+            <div class="control-body">
+                <div class="field-group">
+                    <label for="catchmentSelect"><span class="field-icon">ID</span>Catchment</label>
+                    <select id="catchmentSelect" disabled>
+                        <option value="">Select a lake on the map</option>
+                    </select>
+                </div>
+
+                <div class="selection-meta">
+                    <span class="selection-meta-label">Selected Lake</span>
+                    <strong id="selected-lake-value">--</strong>
+                </div>
+
+                <div class="field-group">
+                    <label for="start-date"><span class="field-icon">FROM</span>Start date</label>
+                    <input id="start-date" type="date">
+                </div>
+
+                <div class="field-group">
+                    <label for="end-date"><span class="field-icon">TO</span>End date</label>
+                    <input id="end-date" type="date">
+                </div>
+
+                <div class="field-group">
+                    <label for="aggregationSelect"><span class="field-icon">TIME</span>Temporal Aggregation</label>
+                    <select id="aggregationSelect">
+                        <option value="monthly" selected>Monthly</option>
+                        <option value="10days">10 Days</option>
+                        <option value="weekly">Weekly</option>
+                    </select>
+                </div>
+
+                <div class="result-variable-group" aria-label="Data to Display">
+                    <span class="selection-meta-label">Data to Display</span>
+
+                    <label class="toggle-row" for="result-variable-temperature">
+                        <input id="result-variable-temperature" type="checkbox" name="result-variable" value="temperature" checked>
+                        <span>Temperature</span>
+                    </label>
+
+                    <label class="toggle-row" for="result-variable-rainfall">
+                        <input id="result-variable-rainfall" type="checkbox" name="result-variable" value="rainfall" checked>
+                        <span>Rainfall</span>
+                    </label>
+
+                    <label class="toggle-row" for="result-variable-aod">
+                        <input id="result-variable-aod" type="checkbox" name="result-variable" value="aod" checked>
+                        <span>AOD</span>
+                    </label>
+
+                    <label class="toggle-row" for="result-variable-chla">
+                        <input id="result-variable-chla" type="checkbox" name="result-variable" value="chla">
+                        <span>Chlorophyll-a</span>
+                    </label>
+
+                    <label class="toggle-row" for="result-variable-lswt">
+                        <input id="result-variable-lswt" type="checkbox" name="result-variable" value="lake_surface_water_temperature">
+                        <span>LSWT</span>
+                    </label>
+
+                    <label class="toggle-row" for="result-variable-tsm">
+                        <input id="result-variable-tsm" type="checkbox" name="result-variable" value="tsm">
+                        <span>Turbidity</span>
+                    </label>
+
+                    <label class="toggle-row" for="result-variable-burned">
+                        <input id="result-variable-burned" type="checkbox" name="result-variable" value="burned_area" checked>
+                        <span>FireCCI / Burned Area</span>
+                    </label>
+                </div>
+
+                <button id="run-analysis" class="run-button" type="button">Run Analysis</button>
+                <button id="reset-analysis" class="reset-button is-hidden" type="button">Reset Analysis</button>
+
+                <label class="toggle-row" for="toggle-burned-overlay">
+                    <input id="toggle-burned-overlay" type="checkbox" checked>
+                    <span>Show burned area overlay</span>
+                </label>
+
+                <label class="toggle-row" for="toggle-lakes-layer">
+                    <input id="toggle-lakes-layer" type="checkbox" checked>
+                    <span>Show lakes</span>
+                </label>
+
+                <label class="toggle-row" for="toggle-temperature-overlay">
+                    <input id="toggle-temperature-overlay" type="checkbox" checked>
+                    <span>Show temperature overlay</span>
+                </label>
+
+                <label class="toggle-row" for="toggle-aod-overlay">
+                    <input id="toggle-aod-overlay" type="checkbox" checked>
+                    <span>Show AOD overlay</span>
+                </label>
+
+                <label class="toggle-row" for="toggle-chla-layer">
+                    <input id="toggle-chla-layer" type="checkbox" checked>
+                    <span>Show Chlorophyll-a layer</span>
+                </label>
+
+                <label class="toggle-row" for="toggle-lswt-layer">
+                    <input id="toggle-lswt-layer" type="checkbox" checked>
+                    <span>Show LSWT layer</span>
+                </label>
+
+                <label class="toggle-row" for="toggle-tsm-layer">
+                    <input id="toggle-tsm-layer" type="checkbox" checked>
+                    <span>Show Turbidity layer</span>
+                </label>
+
+                <div class="status-card">
+                    <span class="status-dot"></span>
+                    <p id="status-message">Choose filters and run the analysis.</p>
+                </div>
+            </div>
+        </aside>
+
+        <div class="view-toggle glass-panel" role="group" aria-label="Map and results view">
+            <button id="show-map" class="view-toggle-button is-active" type="button">Map</button>
+            <button id="show-results" class="view-toggle-button" type="button">Results</button>
+        </div>
+
+        <aside class="quick-stats glass-panel" aria-label="Quick stats">
+            <div class="quick-stat">
+                <span>Catchment</span>
+                <strong id="quick-catchment">--</strong>
+            </div>
+            <div class="quick-stat">
+                <span>Window</span>
+                <strong id="quick-window">--</strong>
+            </div>
+            <div class="quick-stat">
+                <span>Rows</span>
+                <strong id="quick-records">--</strong>
+            </div>
+        </aside>
+
+        <button id="results-backdrop" class="results-backdrop" type="button" aria-label="Close results panel"></button>
+
+        <aside id="results-drawer" class="results-drawer glass-panel" aria-hidden="true">
+            <div class="results-toolbar">
+                <div class="results-toolbar-copy">
+                    <span class="panel-kicker">Results</span>
+                    <h2 id="results-title">Analysis for Selected Lake</h2>
+                </div>
+                <div class="results-toolbar-actions">
+                    <button id="export-csv" class="export-button" type="button">Export CSV</button>
+                    <button id="close-results" class="drawer-close-button" type="button">Close</button>
+                </div>
+            </div>
+
+            <div class="results-overview">
+                <div class="results-period-panel">
+                    <p id="results-period-indicator" class="results-period-indicator">Selected Period: --</p>
+                    <p id="results-debug-meta" class="results-debug-meta">Selected Date: -- | Effective Record: -- | Aggregation: --</p>
+                </div>
+                <div class="kpi-grid">
+                    <article class="kpi-card" data-variable-card="burned_area">
+                        <span class="kpi-label">Burned Area (ha)</span>
+                        <span class="kpi-primary-caption">Mean</span>
+                        <strong id="avg-burned-area">--</strong>
+                        <div class="kpi-statline">
+                            <span>Median <strong id="median-burned-area">--</strong></span>
+                            <span>Std Dev <strong id="std-burned-area">--</strong></span>
+                        </div>
+                    </article>
+                    <article class="kpi-card" data-variable-card="rainfall">
+                        <span class="kpi-label">Rainfall (mm)</span>
+                        <span class="kpi-primary-caption">Mean</span>
+                        <strong id="avg-rainfall">--</strong>
+                        <div class="kpi-statline">
+                            <span>Median <strong id="median-rainfall">--</strong></span>
+                            <span>Std Dev <strong id="std-rainfall">--</strong></span>
+                        </div>
+                    </article>
+                    <article class="kpi-card" data-variable-card="temperature">
+                        <span class="kpi-label">Temperature (&deg;C)</span>
+                        <span class="kpi-primary-caption">Mean</span>
+                        <strong id="avg-temperature">--</strong>
+                        <div class="kpi-statline">
+                            <span>Median <strong id="median-temperature">--</strong></span>
+                            <span>Std Dev <strong id="std-temperature">--</strong></span>
+                        </div>
+                    </article>
+                    <article class="kpi-card" data-variable-card="aod">
+                        <span class="kpi-label">AOD</span>
+                        <span class="kpi-primary-caption">Mean</span>
+                        <strong id="avg-aod">--</strong>
+                        <div class="kpi-statline">
+                            <span>Median <strong id="median-aod">--</strong></span>
+                            <span>Std Dev <strong id="std-aod">--</strong></span>
+                        </div>
+                    </article>
+                    <article class="kpi-card" data-variable-card="chla">
+                        <span class="kpi-label">Chlorophyll-a (mg/m&sup3;)</span>
+                        <span class="kpi-primary-caption">Mean</span>
+                        <strong id="avg-chla">--</strong>
+                        <div class="kpi-statline">
+                            <span>Median <strong id="median-chla">--</strong></span>
+                            <span>Std Dev <strong id="std-chla">--</strong></span>
+                        </div>
+                    </article>
+                    <article class="kpi-card" data-variable-card="lake_surface_water_temperature">
+                        <span class="kpi-label">LSWT (&deg;C)</span>
+                        <span class="kpi-primary-caption">Mean</span>
+                        <strong id="avg-lswt">--</strong>
+                        <div class="kpi-statline">
+                            <span>Median <strong id="median-lswt">--</strong></span>
+                            <span>Std Dev <strong id="std-lswt">--</strong></span>
+                        </div>
+                    </article>
+                    <article class="kpi-card" data-variable-card="tsm">
+                        <span class="kpi-label">Turbidity Proxy (g/m&sup3;)</span>
+                        <span class="kpi-primary-caption">Mean</span>
+                        <strong id="avg-tsm">--</strong>
+                        <div class="kpi-statline">
+                            <span>Median <strong id="median-tsm">--</strong></span>
+                            <span>Std Dev <strong id="std-tsm">--</strong></span>
+                        </div>
+                    </article>
+                    <article class="kpi-card">
+                        <span class="kpi-label">Land Cover</span>
+                        <strong id="dominant-land-cover">--</strong>
+                    </article>
+                    <article class="kpi-card">
+                        <span class="kpi-label">Lake Coverage</span>
+                        <strong id="lake-coverage">--</strong>
+                    </article>
+                </div>
+                <p id="water-insight" class="insight-copy">Lake-based insight will appear here after analysis.</p>
+            </div>
+
+            <div id="results-drawer-body" class="results-grid">
+                <section class="results-card">
+                    <div class="results-card-head">
+                        <h3>Chart</h3>
+                    </div>
+                    <div class="chart-wrap">
+                        <canvas id="results-chart"></canvas>
+                    </div>
+                </section>
+
+                <section class="results-card">
+                    <div class="results-card-head">
+                        <h3>Table</h3>
+                    </div>
+                    <div class="results-table-stack">
+                        <div id="table-container" class="table-container">
+                            <p class="placeholder">Results will appear here.</p>
+                        </div>
+                        <div class="results-card-head results-subsection-head">
+                            <h3>Statistics Summary</h3>
+                        </div>
+                        <div id="statistics-table-container" class="table-container">
+                            <p class="placeholder">Statistics summary will appear here.</p>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </aside>
+    </div>
+
+    <script
+        src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""
+    ></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="config.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
