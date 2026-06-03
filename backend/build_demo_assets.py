@@ -245,7 +245,7 @@ def copy_overlay(source_path: Path, target_filename: str) -> None:
 
 def build_manifest_entry(
     target_filename: str,
-    bounds: tuple[float, float, float, float],
+    bounds: list[list[float]],
     legend: dict[str, Any],
     opacity: float,
     flag_key: str,
@@ -255,7 +255,7 @@ def build_manifest_entry(
     return {
         "image_url": f"/overlays/{target_filename}",
         "filename": target_filename,
-        "bounds": build_bounds_payload(bounds),
+        "bounds": bounds,
         "opacity": opacity,
         "legend": legend,
         flag_key: True,
@@ -264,9 +264,34 @@ def build_manifest_entry(
     }
 
 
+def build_catchment_overlay_payload(variable_name: str, catchment_id: str, start_date: str, end_date: str):
+    overlay_builder = build_burned_area_overlay if variable_name == "burned_area" else (
+        build_temperature_overlay if variable_name == "temperature" else build_aod_overlay
+    )
+
+    with app.test_request_context("/", base_url="http://demo.local"):
+        return suppress_builder_output(
+            overlay_builder,
+            catchment_id,
+            start_date,
+            end_date,
+        )
+
+
+def build_lake_overlay_payload(variable_name: str, lake_id: str, start_date: str, end_date: str):
+    with app.test_request_context("/", base_url="http://demo.local"):
+        return suppress_builder_output(
+            build_lake_cci_overlay,
+            lake_id,
+            variable_name,
+            start_date,
+            end_date,
+            None,
+        )
+
+
 def generate_catchment_overlays(
     catchment_ids: list[str],
-    catchment_bounds: dict[str, tuple[float, float, float, float]],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     manifest: dict[str, Any] = {variable_name: {} for variable_name in CATCHMENT_VARIABLES}
     coverage: dict[str, Any] = {}
@@ -288,33 +313,15 @@ def generate_catchment_overlays(
             for month_key in MONTHS_2021:
                 target_filename = build_target_filename(variable_name, catchment_id, month_key)
                 existing_png = find_existing_monthly_catchment_png(variable_name, catchment_id, month_key)
-
-                if existing_png is not None:
-                    copy_overlay(existing_png, target_filename)
-                    month_entries[month_key] = build_manifest_entry(
-                        target_filename,
-                        catchment_bounds[catchment_id],
-                        legend,
-                        config["opacity"],
-                        config["flag_key"],
-                        "reused",
-                        existing_png.name,
-                    )
-                    variable_stats["available"] += 1
-                    variable_stats["reused"] += 1
-                    continue
-
                 start_date, end_date = month_start_end(month_key)
+
                 try:
-                    with app.test_request_context("/", base_url="http://demo.local"):
-                        payload = suppress_builder_output(
-                            build_burned_area_overlay if variable_name == "burned_area" else (
-                                build_temperature_overlay if variable_name == "temperature" else build_aod_overlay
-                            ),
-                            catchment_id,
-                            start_date,
-                            end_date,
-                        )
+                    payload = build_catchment_overlay_payload(
+                        variable_name,
+                        catchment_id,
+                        start_date,
+                        end_date,
+                    )
                 except Exception:
                     payload = None
                     variable_stats["failed"] += 1
@@ -333,18 +340,22 @@ def generate_catchment_overlays(
                     variable_stats["failed"] += 1
                     continue
 
-                copy_overlay(source_path, target_filename)
+                demo_source_path = existing_png if existing_png is not None else source_path
+                source_mode = "reused" if existing_png is not None else "generated"
+                source_name = existing_png.name if existing_png is not None else source_filename
+
+                copy_overlay(demo_source_path, target_filename)
                 month_entries[month_key] = build_manifest_entry(
                     target_filename,
-                    catchment_bounds[catchment_id],
+                    payload["bounds"],
                     legend,
                     config["opacity"],
                     config["flag_key"],
-                    "generated",
-                    source_filename,
+                    source_mode,
+                    source_name,
                 )
                 variable_stats["available"] += 1
-                variable_stats["generated"] += 1
+                variable_stats[source_mode] += 1
 
             if month_entries:
                 manifest[variable_name][catchment_id] = month_entries
@@ -378,33 +389,15 @@ def generate_lake_overlays(
             for month_key in MONTHS_2021:
                 target_filename = build_target_filename(variable_name, lake_id, month_key)
                 existing_png = find_existing_monthly_lake_png(variable_name, lake_id, month_key)
-
-                if existing_png is not None:
-                    copy_overlay(existing_png, target_filename)
-                    month_entries[month_key] = build_manifest_entry(
-                        target_filename,
-                        lake_row.geometry.bounds,
-                        legend,
-                        config["opacity"],
-                        config["flag_key"],
-                        "reused",
-                        existing_png.name,
-                    )
-                    variable_stats["available"] += 1
-                    variable_stats["reused"] += 1
-                    continue
-
                 start_date, end_date = month_start_end(month_key)
+
                 try:
-                    with app.test_request_context("/", base_url="http://demo.local"):
-                        payload = suppress_builder_output(
-                            build_lake_cci_overlay,
-                            lake_id,
-                            variable_name,
-                            start_date,
-                            end_date,
-                            None,
-                        )
+                    payload = build_lake_overlay_payload(
+                        variable_name,
+                        lake_id,
+                        start_date,
+                        end_date,
+                    )
                 except Exception:
                     payload = None
                     variable_stats["failed"] += 1
@@ -423,18 +416,22 @@ def generate_lake_overlays(
                     variable_stats["failed"] += 1
                     continue
 
-                copy_overlay(source_path, target_filename)
+                demo_source_path = existing_png if existing_png is not None else source_path
+                source_mode = "reused" if existing_png is not None else "generated"
+                source_name = existing_png.name if existing_png is not None else source_filename
+
+                copy_overlay(demo_source_path, target_filename)
                 month_entries[month_key] = build_manifest_entry(
                     target_filename,
-                    lake_row.geometry.bounds,
+                    payload["bounds"],
                     legend,
                     config["opacity"],
                     config["flag_key"],
-                    "generated",
-                    source_filename,
+                    source_mode,
+                    source_name,
                 )
                 variable_stats["available"] += 1
-                variable_stats["generated"] += 1
+                variable_stats[source_mode] += 1
 
             if month_entries:
                 manifest[variable_name][lake_id] = month_entries
@@ -477,12 +474,7 @@ def main() -> None:
     lakes_with_catchments["catchment_id"] = lakes_with_catchments["catchment_id"].astype(str)
     catchment_ids = sorted(set(lakes_with_catchments["catchment_id"].tolist()))
 
-    catchment_bounds = {
-        catchment_id: shape(load_catchment_geometries()[catchment_id]).bounds
-        for catchment_id in catchment_ids
-    }
-
-    catchment_manifest, catchment_coverage = generate_catchment_overlays(catchment_ids, catchment_bounds)
+    catchment_manifest, catchment_coverage = generate_catchment_overlays(catchment_ids)
     lake_manifest, lake_coverage = generate_lake_overlays(lakes_with_catchments)
 
     overlay_index = {
