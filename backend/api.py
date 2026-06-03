@@ -4,16 +4,31 @@ from flask import Flask, request, jsonify, send_from_directory, url_for
 from flask_cors import CORS
 from functools import lru_cache
 from pathlib import Path
-import geopandas as gpd
 import json
 import numpy as np
 import pandas as pd
-import rasterio
-from PIL import Image
-from rasterio.mask import mask
-from rasterio.transform import array_bounds
-from rasterio.warp import transform, transform_bounds, transform_geom
-from shapely.geometry import box, shape
+
+try:
+    import geopandas as gpd
+    import rasterio
+    from PIL import Image
+    from rasterio.mask import mask
+    from rasterio.transform import array_bounds
+    from rasterio.warp import transform, transform_bounds, transform_geom
+    from shapely.geometry import box, shape
+    GEOSPATIAL_RUNTIME_AVAILABLE = True
+except ImportError:
+    gpd = None
+    rasterio = None
+    Image = None
+    mask = None
+    array_bounds = None
+    transform = None
+    transform_bounds = None
+    transform_geom = None
+    box = None
+    shape = None
+    GEOSPATIAL_RUNTIME_AVAILABLE = False
 
 try:
     from temporal_resampling import normalize_aggregation_mode, resample_analysis_records
@@ -48,6 +63,11 @@ DATASET_PATH = Path(__file__).resolve().parent / "outputs" / "final_dataset.csv"
 DEMO_ASSETS_DIR = Path(__file__).resolve().parent / "demo_assets"
 DEMO_OVERLAYS_DIR = DEMO_ASSETS_DIR / "overlays"
 DEMO_OVERLAY_INDEX_PATH = DEMO_ASSETS_DIR / "overlay-index.json"
+DEMO_LAKES_OVERVIEW_PATH = DEMO_ASSETS_DIR / "lakes-overview.geojson"
+DEMO_LAKE_SELECTION_INDEX_PATH = DEMO_ASSETS_DIR / "lake-selection-index.json"
+DEMO_LAKES_BY_CATCHMENT_PATH = DEMO_ASSETS_DIR / "lakes-by-catchment.json"
+DEMO_LAKE_SUMMARY_BY_CATCHMENT_PATH = DEMO_ASSETS_DIR / "lake-summary-by-catchment.json"
+DEMO_LAND_COVER_BY_CATCHMENT_PATH = DEMO_ASSETS_DIR / "land-cover-by-catchment.json"
 FIRECCI_DIR = BASE_DIR / "data" / "firecci"
 TEMPERATURE_DIR = BASE_DIR / "data" / "ERA5_Temperature"
 AOD_DIR = BASE_DIR / "data" / "AOD_Exports"
@@ -120,6 +140,83 @@ def load_demo_overlay_index():
         return json.load(file)
 
 
+def require_geospatial_runtime():
+    if not GEOSPATIAL_RUNTIME_AVAILABLE:
+        raise RuntimeError(
+            "Optional geospatial dependencies are unavailable in this runtime. "
+            "Use the pre-generated demo assets instead of runtime raster processing."
+        )
+
+
+def load_json_file(path: Path, default):
+    if not path.exists():
+        return default
+
+    with path.open("r", encoding="utf-8") as file:
+        return json.load(file)
+
+
+@lru_cache(maxsize=1)
+def load_demo_lakes_overview():
+    return load_json_file(DEMO_LAKES_OVERVIEW_PATH, {"type": "FeatureCollection", "features": []})
+
+
+@lru_cache(maxsize=1)
+def load_demo_lake_selection_index():
+    return load_json_file(DEMO_LAKE_SELECTION_INDEX_PATH, {})
+
+
+@lru_cache(maxsize=1)
+def load_demo_lakes_by_catchment():
+    return load_json_file(DEMO_LAKES_BY_CATCHMENT_PATH, {})
+
+
+@lru_cache(maxsize=1)
+def load_demo_lake_summary_by_catchment():
+    return load_json_file(DEMO_LAKE_SUMMARY_BY_CATCHMENT_PATH, {})
+
+
+@lru_cache(maxsize=1)
+def load_demo_land_cover_by_catchment():
+    return load_json_file(DEMO_LAND_COVER_BY_CATCHMENT_PATH, {})
+
+
+def get_demo_lake_feature(lake_id: str):
+    normalized_lake_id = normalize_lake_id(lake_id)
+    for feature in load_demo_lakes_overview().get("features", []):
+        properties = feature.get("properties") or {}
+        feature_lake_id = normalize_lake_id(properties.get("Lake_ID"))
+        if feature_lake_id == normalized_lake_id:
+            return feature
+    return None
+
+
+def get_demo_catchment_feature(catchment_id: str):
+    if not catchment_id:
+        return None
+
+    geometry = load_catchment_geometries().get(str(catchment_id))
+    if not geometry:
+        return None
+
+    return {
+        "type": "Feature",
+        "properties": {"catchment_id": str(catchment_id)},
+        "geometry": geometry,
+    }
+
+
+def get_demo_lake_indicators(catchment_id: str):
+    summary = load_demo_lake_summary_by_catchment().get(str(catchment_id))
+    if summary is not None:
+        return summary
+
+    return {
+        "lake_coverage_percent": 0.0,
+        "water_insight": "Analysis unavailable"
+    }
+
+
 def serialize_records(frame: pd.DataFrame, aggregation: str = "monthly"):
     records = frame.copy()
     resolved_aggregation = normalize_aggregation_mode(aggregation)
@@ -158,6 +255,7 @@ def parse_requested_variables(raw_value: str | None):
 
 @lru_cache(maxsize=1)
 def load_aoi_gdf():
+    require_geospatial_runtime()
     if not AOI_PATH.exists():
         return gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
 
@@ -201,6 +299,7 @@ def load_catchment_geometries():
 
 @lru_cache(maxsize=1)
 def load_catchments_gdf():
+    require_geospatial_runtime()
     geometries = load_catchment_geometries()
     if not geometries:
         return gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
@@ -224,6 +323,7 @@ def load_catchments_gdf():
 
 @lru_cache(maxsize=1)
 def load_lakes_dataset():
+    require_geospatial_runtime()
     if not LAKES_PATH.exists():
         return gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
 
@@ -250,6 +350,7 @@ def load_lakes_dataset():
 
 @lru_cache(maxsize=1)
 def load_lakes_with_catchments():
+    require_geospatial_runtime()
     lakes_gdf = load_lakes_dataset().copy()
     catchments_gdf = load_catchments_gdf()
 
@@ -473,11 +574,13 @@ def get_leaflet_bounds(src):
 
 
 def build_overlay_bounds(transform, height: int, width: int):
+    require_geospatial_runtime()
     left, bottom, right, top = array_bounds(height, width, transform)
     return [[bottom, left], [top, right]]
 
 
 def get_catchment_shape(catchment_id: str):
+    require_geospatial_runtime()
     catchment_geometry = load_catchment_geometries().get(str(catchment_id))
     return shape(catchment_geometry) if catchment_geometry else None
 
@@ -497,6 +600,7 @@ def normalize_lake_id(value):
 
 
 def get_lake_record(lake_id: str):
+    require_geospatial_runtime()
     lakes_gdf = load_lakes_with_catchments()
     if lakes_gdf.empty:
         return None
@@ -510,6 +614,7 @@ def get_lake_record(lake_id: str):
 
 
 def get_lake_shape(lake_id: str):
+    require_geospatial_runtime()
     lake_record = get_lake_record(lake_id)
     if lake_record is None:
         return None
@@ -522,6 +627,7 @@ def get_lake_shape(lake_id: str):
 
 
 def resolve_catchment_id_for_lake_geometry(lake_geometry):
+    require_geospatial_runtime()
     catchments_gdf = load_catchments_gdf()
     if lake_geometry is None or catchments_gdf.empty:
         return None
@@ -543,6 +649,7 @@ def resolve_catchment_id_for_lake_geometry(lake_geometry):
 
 
 def get_catchment_id_for_lake(lake_id: str):
+    require_geospatial_runtime()
     lake_record = get_lake_record(lake_id)
     if lake_record is None:
         return None
@@ -833,6 +940,7 @@ def build_burned_raster_bundle(catchment_id: str, start_date: str, end_date: str
 
 
 def build_burned_area_overlay(catchment_id: str, start_date: str, end_date: str, raster_bundle=None):
+    require_geospatial_runtime()
     raster_paths = [
         get_firecci_confidence_path(month)
         for month in month_start_range(start_date, end_date)
@@ -919,6 +1027,7 @@ def build_burned_area_overlay(catchment_id: str, start_date: str, end_date: str,
 
 
 def clip_scalar_raster(src, catchment_shape):
+    require_geospatial_runtime()
     clipped, clipped_transform = mask(
         src,
         [get_catchment_geometry_for_raster(src, catchment_shape)],
@@ -963,6 +1072,7 @@ def build_lake_cci_overlay(
     end_date: str,
     analysis_records: pd.DataFrame | None = None
 ):
+    require_geospatial_runtime()
     legend = get_lake_cci_legend(variable_name)
     if not lake_id or legend is None:
         return None
@@ -1066,6 +1176,7 @@ def build_lake_cci_overlay(
 
 
 def build_temperature_overlay(catchment_id: str, start_date: str, end_date: str):
+    require_geospatial_runtime()
     raster_paths = [
         get_temperature_raster_path(month)
         for month in month_start_range(start_date, end_date)
@@ -1151,6 +1262,7 @@ def build_temperature_overlay(catchment_id: str, start_date: str, end_date: str)
 
 
 def build_aod_overlay(catchment_id: str, start_date: str, end_date: str):
+    require_geospatial_runtime()
     raster_paths = [
         get_aod_raster_path(month)
         for month in month_start_range(start_date, end_date)
@@ -1289,6 +1401,7 @@ def build_safe_analysis_response(
 
 
 def get_catchment_geometry_for_raster(src, catchment_shape):
+    require_geospatial_runtime()
     geometry = catchment_shape.__geo_interface__
 
     if src.crs is None:
@@ -1301,6 +1414,7 @@ def get_catchment_geometry_for_raster(src, catchment_shape):
 
 
 def raster_intersects_catchment(src, catchment_shape):
+    require_geospatial_runtime()
     if src.crs is None:
         catchment_geometry = catchment_shape
     else:
@@ -1310,6 +1424,7 @@ def raster_intersects_catchment(src, catchment_shape):
 
 
 def clip_burned_raster(src, catchment_shape):
+    require_geospatial_runtime()
     clipped, clipped_transform = mask(
         src,
         [get_catchment_geometry_for_raster(src, catchment_shape)],
@@ -1513,6 +1628,10 @@ def build_analysis_records(dataset: pd.DataFrame, catchment_id: str, start_times
 
 
 def build_lakes_overview_geojson():
+    demo_overview = load_demo_lakes_overview()
+    if demo_overview.get("features"):
+        return demo_overview
+
     lakes_gdf = load_lakes_with_catchments()
     if lakes_gdf.empty:
         return {"type": "FeatureCollection", "features": []}
@@ -1524,6 +1643,23 @@ def build_lakes_overview_geojson():
 
 
 def build_lake_selection_payload(lake_id: str):
+    demo_entry = load_demo_lake_selection_index().get(normalize_lake_id(lake_id))
+    if demo_entry is not None:
+        normalized_lake_id = normalize_lake_id(demo_entry.get("lake_id"))
+        lake_feature = get_demo_lake_feature(normalized_lake_id)
+        catchment_id = demo_entry.get("catchment_id")
+        return {
+            "lake_id": normalized_lake_id,
+            "catchment_id": catchment_id,
+            "lake_label": demo_entry.get("lake_label") or f"Lake {normalized_lake_id}",
+            "lake": {
+                "type": "Feature",
+                "properties": {"lake_id": normalized_lake_id},
+                "geometry": (lake_feature or {}).get("geometry")
+            } if lake_feature else None,
+            "catchment": get_demo_catchment_feature(catchment_id)
+        }
+
     catchment_id = get_catchment_id_for_lake(lake_id)
     lake_record = get_lake_record(lake_id)
 
@@ -1557,6 +1693,7 @@ def build_lake_selection_payload(lake_id: str):
 
 
 def get_clipped_lakes_gdf(catchment_id: str):
+    require_geospatial_runtime()
     catchment_shape = get_catchment_shape(catchment_id)
     if catchment_shape is None:
         return gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
@@ -1581,6 +1718,10 @@ def get_clipped_lakes_gdf(catchment_id: str):
 
 
 def build_lakes_geojson(catchment_id: str):
+    demo_lookup = load_demo_lakes_by_catchment()
+    if str(catchment_id) in demo_lookup:
+        return demo_lookup[str(catchment_id)]
+
     clipped_lakes = get_clipped_lakes_gdf(catchment_id)
     if clipped_lakes.empty:
         return {"type": "FeatureCollection", "features": []}
@@ -1590,6 +1731,10 @@ def build_lakes_geojson(catchment_id: str):
 
 
 def build_lake_indicators(catchment_id: str):
+    demo_summary = load_demo_lake_summary_by_catchment()
+    if str(catchment_id) in demo_summary:
+        return demo_summary[str(catchment_id)]
+
     catchment_shape = get_catchment_shape(catchment_id)
     if catchment_shape is None:
         return {
@@ -1904,6 +2049,10 @@ def lake_selection():
 
 @app.route("/land-cover", methods=["GET"])
 def land_cover_lookup():
+    demo_lookup = load_demo_land_cover_by_catchment()
+    if demo_lookup:
+        return jsonify(demo_lookup)
+
     df = load_dataset()
     if "land_cover" not in df.columns:
         return jsonify({})
