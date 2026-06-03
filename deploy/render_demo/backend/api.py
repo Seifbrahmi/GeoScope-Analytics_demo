@@ -68,9 +68,6 @@ DEMO_LAKE_SELECTION_INDEX_PATH = DEMO_ASSETS_DIR / "lake-selection-index.json"
 DEMO_LAKES_BY_CATCHMENT_PATH = DEMO_ASSETS_DIR / "lakes-by-catchment.json"
 DEMO_LAKE_SUMMARY_BY_CATCHMENT_PATH = DEMO_ASSETS_DIR / "lake-summary-by-catchment.json"
 DEMO_LAND_COVER_BY_CATCHMENT_PATH = DEMO_ASSETS_DIR / "land-cover-by-catchment.json"
-FIRECCI_DIR = BASE_DIR / "data" / "firecci"
-TEMPERATURE_DIR = BASE_DIR / "data" / "ERA5_Temperature"
-AOD_DIR = BASE_DIR / "data" / "AOD_Exports"
 OVERLAY_DIR = Path(__file__).resolve().parent / "outputs" / "burned_overlays"
 OVERLAY_DIR.mkdir(parents=True, exist_ok=True)
 AOD_OVERLAY_DIR = Path(__file__).resolve().parent / "outputs" / "aod_overlays"
@@ -80,8 +77,6 @@ LAKE_CCI_OVERLAY_DIR.mkdir(parents=True, exist_ok=True)
 MAX_OVERLAY_DIMENSION = 1600
 CATCHMENTS_PATH = BASE_DIR / "frontend" / "data" / "catchments_aoi.geojson"
 CATCHMENT_ID_MAP_PATH = BASE_DIR / "frontend" / "data" / "catchment-id-map.json"
-AOI_PATH = BASE_DIR / "data" / "AOI.geojson"
-LAKES_PATH = BASE_DIR / "data" / "LakesOI.geojson"
 LAKE_SIMPLIFY_TOLERANCE = 0.001
 BURNED_PIXEL_THRESHOLD = 0.0
 SUPPORTED_RESULT_VARIABLES = {
@@ -102,7 +97,6 @@ DEFAULT_RESULT_VARIABLES = [
     "lake_surface_water_temperature",
     "tsm",
 ]
-LAKE_CCI_DIR = BASE_DIR / "data" / "lake_cci"
 
 
 def load_dataset():
@@ -146,6 +140,11 @@ def require_geospatial_runtime():
             "Optional geospatial dependencies are unavailable in this runtime. "
             "Use the pre-generated demo assets instead of runtime raster processing."
         )
+
+
+def legacy_data_path(*parts: str):
+    require_geospatial_runtime()
+    return BASE_DIR.joinpath("data", *parts)
 
 
 def load_json_file(path: Path, default):
@@ -256,10 +255,11 @@ def parse_requested_variables(raw_value: str | None):
 @lru_cache(maxsize=1)
 def load_aoi_gdf():
     require_geospatial_runtime()
-    if not AOI_PATH.exists():
+    aoi_path = legacy_data_path("AOI.geojson")
+    if not aoi_path.exists():
         return gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
 
-    aoi_gdf = gpd.read_file(AOI_PATH)
+    aoi_gdf = gpd.read_file(aoi_path)
     if aoi_gdf.crs is None:
         aoi_gdf = aoi_gdf.set_crs(epsg=4326)
     elif aoi_gdf.crs.to_epsg() != 4326:
@@ -324,10 +324,11 @@ def load_catchments_gdf():
 @lru_cache(maxsize=1)
 def load_lakes_dataset():
     require_geospatial_runtime()
-    if not LAKES_PATH.exists():
+    lakes_path = legacy_data_path("LakesOI.geojson")
+    if not lakes_path.exists():
         return gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
 
-    lakes_gdf = gpd.read_file(LAKES_PATH)
+    lakes_gdf = gpd.read_file(lakes_path)
     if lakes_gdf.crs is None:
         lakes_gdf = lakes_gdf.set_crs(epsg=4326)
     elif lakes_gdf.crs.to_epsg() != 4326:
@@ -379,7 +380,7 @@ def month_start_range(start_date: str, end_date: str):
 
 def get_firecci_confidence_path(month_start: pd.Timestamp):
     filename = f"{month_start.strftime('%Y%m01')}-ESACCI-L3S_FIRE-BA-MODIS-AREA_1-fv5.1-CL.tif"
-    path = FIRECCI_DIR / filename
+    path = legacy_data_path("firecci", filename)
     return path if path.exists() else None
 
 
@@ -387,20 +388,20 @@ def get_temperature_raster_path(month_start: pd.Timestamp):
     year = month_start.strftime("%Y")
     month = month_start.strftime("%m")
     # Normalize monthly ERA5 temperature filenames automatically.
-    candidates = sorted(TEMPERATURE_DIR.glob(f"*_{year}_{month}.tif"))
+    candidates = sorted(legacy_data_path("ERA5_Temperature").glob(f"*_{year}_{month}.tif"))
     return candidates[0] if candidates else None
 
 
 def get_aod_raster_path(month_start: pd.Timestamp):
     year = month_start.strftime("%Y")
     month = month_start.strftime("%m")
-    candidates = sorted(AOD_DIR.glob(f"*_{year}_{month}.tif"))
+    candidates = sorted(legacy_data_path("AOD_Exports").glob(f"*_{year}_{month}.tif"))
     return candidates[0] if candidates else None
 
 
 def get_lake_cci_netcdf_path(day_timestamp: pd.Timestamp):
     date_key = day_timestamp.strftime("%Y%m%d")
-    candidates = sorted(LAKE_CCI_DIR.glob(f"*{date_key}*_processed.nc"))
+    candidates = sorted(legacy_data_path("lake_cci").glob(f"*{date_key}*_processed.nc"))
     return candidates[0] if candidates else None
 
 

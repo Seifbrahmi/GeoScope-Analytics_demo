@@ -2621,7 +2621,7 @@ function loadCatchmentIdMap() {
 }
 
 function loadAoiBounds() {
-    return fetch("data/aoi.geojson")
+    return fetch("data/catchments_aoi.geojson")
         .then(function (response) {
             if (!response.ok) {
                 throw new Error("Failed to fetch AOI");
