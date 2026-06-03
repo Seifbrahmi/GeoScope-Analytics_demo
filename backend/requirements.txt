@@ -1,0 +1,9 @@
+flask
+flask-cors
+geopandas
+gunicorn
+numpy
+pandas
+pillow
+rasterio
+shapely

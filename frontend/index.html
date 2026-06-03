@@ -58,6 +58,15 @@
                     <input id="end-date" type="date">
                 </div>
 
+                <div class="field-group">
+                    <label for="aggregationSelect"><span class="field-icon">TIME</span>Temporal Aggregation</label>
+                    <select id="aggregationSelect">
+                        <option value="monthly" selected>Monthly</option>
+                        <option value="10days">10 Days</option>
+                        <option value="weekly">Weekly</option>
+                    </select>
+                </div>
+
                 <div class="result-variable-group" aria-label="Data to Display">
                     <span class="selection-meta-label">Data to Display</span>
 
@@ -69,6 +78,26 @@
                     <label class="toggle-row" for="result-variable-rainfall">
                         <input id="result-variable-rainfall" type="checkbox" name="result-variable" value="rainfall" checked>
                         <span>Rainfall</span>
+                    </label>
+
+                    <label class="toggle-row" for="result-variable-aod">
+                        <input id="result-variable-aod" type="checkbox" name="result-variable" value="aod" checked>
+                        <span>AOD</span>
+                    </label>
+
+                    <label class="toggle-row" for="result-variable-chla">
+                        <input id="result-variable-chla" type="checkbox" name="result-variable" value="chla">
+                        <span>Chlorophyll-a</span>
+                    </label>
+
+                    <label class="toggle-row" for="result-variable-lswt">
+                        <input id="result-variable-lswt" type="checkbox" name="result-variable" value="lake_surface_water_temperature">
+                        <span>LSWT</span>
+                    </label>
+
+                    <label class="toggle-row" for="result-variable-tsm">
+                        <input id="result-variable-tsm" type="checkbox" name="result-variable" value="tsm">
+                        <span>Turbidity</span>
                     </label>
 
                     <label class="toggle-row" for="result-variable-burned">
@@ -93,6 +122,26 @@
                 <label class="toggle-row" for="toggle-temperature-overlay">
                     <input id="toggle-temperature-overlay" type="checkbox" checked>
                     <span>Show temperature overlay</span>
+                </label>
+
+                <label class="toggle-row" for="toggle-aod-overlay">
+                    <input id="toggle-aod-overlay" type="checkbox" checked>
+                    <span>Show AOD overlay</span>
+                </label>
+
+                <label class="toggle-row" for="toggle-chla-layer">
+                    <input id="toggle-chla-layer" type="checkbox" checked>
+                    <span>Show Chlorophyll-a layer</span>
+                </label>
+
+                <label class="toggle-row" for="toggle-lswt-layer">
+                    <input id="toggle-lswt-layer" type="checkbox" checked>
+                    <span>Show LSWT layer</span>
+                </label>
+
+                <label class="toggle-row" for="toggle-tsm-layer">
+                    <input id="toggle-tsm-layer" type="checkbox" checked>
+                    <span>Show Turbidity layer</span>
                 </label>
 
                 <div class="status-card">
@@ -137,18 +186,73 @@
             </div>
 
             <div class="results-overview">
+                <div class="results-period-panel">
+                    <p id="results-period-indicator" class="results-period-indicator">Selected Period: --</p>
+                    <p id="results-debug-meta" class="results-debug-meta">Selected Date: -- | Effective Record: -- | Aggregation: --</p>
+                </div>
                 <div class="kpi-grid">
                     <article class="kpi-card" data-variable-card="burned_area">
-                        <span class="kpi-label">Avg Burned Area (ha)</span>
+                        <span class="kpi-label">Burned Area (ha)</span>
+                        <span class="kpi-primary-caption">Mean</span>
                         <strong id="avg-burned-area">--</strong>
+                        <div class="kpi-statline">
+                            <span>Median <strong id="median-burned-area">--</strong></span>
+                            <span>Std Dev <strong id="std-burned-area">--</strong></span>
+                        </div>
                     </article>
                     <article class="kpi-card" data-variable-card="rainfall">
-                        <span class="kpi-label">Average Rainfall (mm)</span>
+                        <span class="kpi-label">Rainfall (mm)</span>
+                        <span class="kpi-primary-caption">Mean</span>
                         <strong id="avg-rainfall">--</strong>
+                        <div class="kpi-statline">
+                            <span>Median <strong id="median-rainfall">--</strong></span>
+                            <span>Std Dev <strong id="std-rainfall">--</strong></span>
+                        </div>
                     </article>
                     <article class="kpi-card" data-variable-card="temperature">
-                        <span class="kpi-label">Average Temperature (&deg;C)</span>
+                        <span class="kpi-label">Temperature (&deg;C)</span>
+                        <span class="kpi-primary-caption">Mean</span>
                         <strong id="avg-temperature">--</strong>
+                        <div class="kpi-statline">
+                            <span>Median <strong id="median-temperature">--</strong></span>
+                            <span>Std Dev <strong id="std-temperature">--</strong></span>
+                        </div>
+                    </article>
+                    <article class="kpi-card" data-variable-card="aod">
+                        <span class="kpi-label">AOD</span>
+                        <span class="kpi-primary-caption">Mean</span>
+                        <strong id="avg-aod">--</strong>
+                        <div class="kpi-statline">
+                            <span>Median <strong id="median-aod">--</strong></span>
+                            <span>Std Dev <strong id="std-aod">--</strong></span>
+                        </div>
+                    </article>
+                    <article class="kpi-card" data-variable-card="chla">
+                        <span class="kpi-label">Chlorophyll-a (mg/m&sup3;)</span>
+                        <span class="kpi-primary-caption">Mean</span>
+                        <strong id="avg-chla">--</strong>
+                        <div class="kpi-statline">
+                            <span>Median <strong id="median-chla">--</strong></span>
+                            <span>Std Dev <strong id="std-chla">--</strong></span>
+                        </div>
+                    </article>
+                    <article class="kpi-card" data-variable-card="lake_surface_water_temperature">
+                        <span class="kpi-label">LSWT (&deg;C)</span>
+                        <span class="kpi-primary-caption">Mean</span>
+                        <strong id="avg-lswt">--</strong>
+                        <div class="kpi-statline">
+                            <span>Median <strong id="median-lswt">--</strong></span>
+                            <span>Std Dev <strong id="std-lswt">--</strong></span>
+                        </div>
+                    </article>
+                    <article class="kpi-card" data-variable-card="tsm">
+                        <span class="kpi-label">Turbidity Proxy (g/m&sup3;)</span>
+                        <span class="kpi-primary-caption">Mean</span>
+                        <strong id="avg-tsm">--</strong>
+                        <div class="kpi-statline">
+                            <span>Median <strong id="median-tsm">--</strong></span>
+                            <span>Std Dev <strong id="std-tsm">--</strong></span>
+                        </div>
                     </article>
                     <article class="kpi-card">
                         <span class="kpi-label">Land Cover</span>
@@ -176,8 +280,16 @@
                     <div class="results-card-head">
                         <h3>Table</h3>
                     </div>
-                    <div id="table-container" class="table-container">
-                        <p class="placeholder">Results will appear here.</p>
+                    <div class="results-table-stack">
+                        <div id="table-container" class="table-container">
+                            <p class="placeholder">Results will appear here.</p>
+                        </div>
+                        <div class="results-card-head results-subsection-head">
+                            <h3>Statistics Summary</h3>
+                        </div>
+                        <div id="statistics-table-container" class="table-container">
+                            <p class="placeholder">Statistics summary will appear here.</p>
+                        </div>
                     </div>
                 </section>
             </div>
@@ -190,6 +302,7 @@
         crossorigin=""
     ></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="config.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

@@ -1,8 +1,38 @@
 var map = L.map("map").setView([40, -100], 4);
 
+var apiBaseUrl = window.APP_CONFIG && typeof window.APP_CONFIG.apiBaseUrl === "string"
+    ? window.APP_CONFIG.apiBaseUrl.replace(/\/+$/, "")
+    : "http://127.0.0.1:5000";
+
+function buildApiUrl(path) {
+    return apiBaseUrl + path;
+}
+
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "&copy; OpenStreetMap contributors"
 }).addTo(map);
+
+var MAP_PANES = {
+    catchmentBoundaryPane: 250,
+    lakesPane: 300,
+    lakeCciChlaPane: 400,
+    lakeCciLswtPane: 410,
+    lakeCciTsmPane: 420,
+    aodPane: 500,
+    temperaturePane: 550,
+    burnedPane: 600,
+    selectedLakePane: 700,
+    selectedCatchmentPane: 710
+};
+
+Object.keys(MAP_PANES).forEach(function (paneName) {
+    if (!map.getPane(paneName)) {
+        map.createPane(paneName);
+    }
+    map.getPane(paneName).style.zIndex = String(MAP_PANES[paneName]);
+});
+
+console.log("[pane_config]", MAP_PANES);
 
 var catchmentsLayer = null;
 var catchmentsGeoJsonData = null;
@@ -24,9 +54,22 @@ var burnedAreaLegend = null;
 var temperatureOverlay = null;
 var temperatureOverlayData = null;
 var temperatureLegend = null;
+var aodOverlay = null;
+var aodOverlayData = null;
+var aodLegend = null;
+var chlaOverlayData = null;
+var lswtOverlayData = null;
+var tsmOverlayData = null;
+var chlaLayer = null;
+var chlaLegend = null;
+var lswtLayer = null;
+var lswtLegend = null;
+var tsmLayer = null;
+var tsmLegend = null;
 var lakesLayer = null;
 var lakesGeoJsonData = null;
 var lakesOverviewLayer = null;
+var selectedLakeHighlightLayer = null;
 var hasCompletedAnalysis = false;
 var analysisIsLoading = false;
 
@@ -36,11 +79,16 @@ var toggleControlsButton = document.getElementById("toggle-controls");
 var catchmentSelect = document.getElementById("catchmentSelect");
 var startDateInput = document.getElementById("start-date");
 var endDateInput = document.getElementById("end-date");
+var aggregationSelect = document.getElementById("aggregationSelect");
 var runButton = document.getElementById("run-analysis");
 var resetAnalysisButton = document.getElementById("reset-analysis");
 var burnedOverlayToggle = document.getElementById("toggle-burned-overlay");
 var lakesLayerToggle = document.getElementById("toggle-lakes-layer");
 var temperatureOverlayToggle = document.getElementById("toggle-temperature-overlay");
+var aodOverlayToggle = document.getElementById("toggle-aod-overlay");
+var chlaLayerToggle = document.getElementById("toggle-chla-layer");
+var lswtLayerToggle = document.getElementById("toggle-lswt-layer");
+var tsmLayerToggle = document.getElementById("toggle-tsm-layer");
 var resultVariableInputs = Array.prototype.slice.call(document.querySelectorAll('input[name="result-variable"]'));
 var exportButton = document.getElementById("export-csv");
 var closeResultsButton = document.getElementById("close-results");
@@ -48,13 +96,34 @@ var resultsBackdrop = document.getElementById("results-backdrop");
 var showMapButton = document.getElementById("show-map");
 var showResultsButton = document.getElementById("show-results");
 var tableContainer = document.getElementById("table-container");
+var statisticsTableContainer = document.getElementById("statistics-table-container");
 var resultsChartCanvas = document.getElementById("results-chart");
 var resultsShell = document.getElementById("results-drawer");
 var resultsTitle = document.getElementById("results-title");
+var resultsPeriodIndicator = document.getElementById("results-period-indicator");
+var resultsDebugMeta = document.getElementById("results-debug-meta");
 var selectedLakeValue = document.getElementById("selected-lake-value");
 var avgBurnedArea = document.getElementById("avg-burned-area");
 var avgRainfall = document.getElementById("avg-rainfall");
 var avgTemperature = document.getElementById("avg-temperature");
+var avgAod = document.getElementById("avg-aod");
+var avgChla = document.getElementById("avg-chla");
+var avgLswt = document.getElementById("avg-lswt");
+var avgTsm = document.getElementById("avg-tsm");
+var medianBurnedArea = document.getElementById("median-burned-area");
+var medianRainfall = document.getElementById("median-rainfall");
+var medianTemperature = document.getElementById("median-temperature");
+var medianAod = document.getElementById("median-aod");
+var medianChla = document.getElementById("median-chla");
+var medianLswt = document.getElementById("median-lswt");
+var medianTsm = document.getElementById("median-tsm");
+var stdBurnedArea = document.getElementById("std-burned-area");
+var stdRainfall = document.getElementById("std-rainfall");
+var stdTemperature = document.getElementById("std-temperature");
+var stdAod = document.getElementById("std-aod");
+var stdChla = document.getElementById("std-chla");
+var stdLswt = document.getElementById("std-lswt");
+var stdTsm = document.getElementById("std-tsm");
 var dominantLandCover = document.getElementById("dominant-land-cover");
 var lakeCoverage = document.getElementById("lake-coverage");
 var waterInsight = document.getElementById("water-insight");
@@ -66,7 +135,10 @@ var statusDot = document.querySelector(".status-dot");
 var chartTextColor = "#6b7280";
 var chartGridColor = "rgba(203, 213, 225, 0.65)";
 var chartFontFamily = "\"Manrope\", \"Segoe UI\", sans-serif";
-var lastRequestedVariables = ["temperature", "rainfall", "burned_area"];
+var lastRequestedVariables = ["temperature", "rainfall", "aod", "burned_area", "chla", "lake_surface_water_temperature", "tsm"];
+var lastRequestedAggregation = "monthly";
+var hasAoiMapView = false;
+var selectedLakeFeature = null;
 
 var resultVariableConfig = {
     temperature: {
@@ -76,6 +148,22 @@ var resultVariableConfig = {
     rainfall: {
         label: "Rainfall",
         overlayToggle: null
+    },
+    aod: {
+        label: "AOD",
+        overlayToggle: aodOverlayToggle
+    },
+    chla: {
+        label: "Chlorophyll-a",
+        overlayToggle: chlaLayerToggle
+    },
+    lake_surface_water_temperature: {
+        label: "LSWT",
+        overlayToggle: lswtLayerToggle
+    },
+    tsm: {
+        label: "Turbidity",
+        overlayToggle: tsmLayerToggle
     },
     burned_area: {
         label: "FireCCI / Burned Area",
@@ -116,23 +204,225 @@ function metersToMillimeters(value) {
     return isNaN(numericValue) ? null : numericValue * 1000;
 }
 
-function formatBurnedAreaHectares(value) {
+function squareMetersToHectares(value) {
+    var numericValue = Number(value);
+    return isNaN(numericValue) ? null : numericValue / 10000;
+}
+
+function formatLocaleNumber(value, minimumFractionDigits, maximumFractionDigits) {
     var numericValue = Number(value);
 
     if (isNaN(numericValue)) {
         return "--";
     }
 
-    if (numericValue === 0) {
+    return numericValue.toLocaleString("en-US", {
+        minimumFractionDigits: minimumFractionDigits,
+        maximumFractionDigits: maximumFractionDigits
+    });
+}
+
+function isTenDayAggregation() {
+    return lastRequestedAggregation === "10days";
+}
+
+function formatBurnedAreaHectares(value) {
+    var hectaresValue = squareMetersToHectares(value);
+
+    if (hectaresValue === null) {
+        return "--";
+    }
+
+    if (hectaresValue === 0) {
         return "0.00";
     }
 
-    return numericValue < 1 ? numericValue.toFixed(4) : numericValue.toFixed(2);
+    return formatLocaleNumber(hectaresValue, hectaresValue < 1 ? 4 : 2, hectaresValue < 1 ? 4 : 2);
+}
+
+function formatBurnedAreaHectaresPrecise(value) {
+    var hectaresValue = squareMetersToHectares(value);
+    return hectaresValue === null ? "--" : formatLocaleNumber(hectaresValue, 2, 4);
 }
 
 function formatTemperatureCelsius(value) {
     var numericValue = Number(value);
-    return isNaN(numericValue) ? "--" : numericValue.toFixed(2);
+    return isNaN(numericValue) ? "--" : formatLocaleNumber(numericValue, 2, 2);
+}
+
+function formatRainfallMillimeters(value) {
+    var rainfallMillimeters = metersToMillimeters(value);
+    return rainfallMillimeters === null ? "--" : formatLocaleNumber(rainfallMillimeters, 2, 2);
+}
+
+function formatAodValue(value) {
+    var numericValue = Number(value);
+    return isNaN(numericValue) ? "--" : formatLocaleNumber(numericValue, 3, 3);
+}
+
+function formatChlaValue(value) {
+    var numericValue = Number(value);
+    return isNaN(numericValue) ? "--" : formatLocaleNumber(numericValue, 2, 2);
+}
+
+function formatLswtValue(value) {
+    var numericValue = Number(value);
+    return isNaN(numericValue) ? "--" : formatLocaleNumber(numericValue, 2, 2);
+}
+
+function formatTsmValue(value) {
+    var numericValue = Number(value);
+    return isNaN(numericValue) ? "--" : formatLocaleNumber(numericValue, 2, 2);
+}
+
+function formatBurnedAreaHectaresDetailed(value) {
+    var hectaresValue = squareMetersToHectares(value);
+    return hectaresValue === null ? "--" : formatLocaleNumber(hectaresValue, 2, 4);
+}
+
+function formatRainfallMillimetersDetailed(value) {
+    var rainfallMillimeters = metersToMillimeters(value);
+    return rainfallMillimeters === null ? "--" : formatLocaleNumber(rainfallMillimeters, 3, 4);
+}
+
+function formatTemperatureDetailed(value) {
+    var numericValue = Number(value);
+    return isNaN(numericValue) ? "--" : formatLocaleNumber(numericValue, 3, 4);
+}
+
+function formatAodDetailed(value) {
+    var numericValue = Number(value);
+    return isNaN(numericValue) ? "--" : formatLocaleNumber(numericValue, 4, 4);
+}
+
+function formatChlaDetailed(value) {
+    var numericValue = Number(value);
+    return isNaN(numericValue) ? "--" : formatLocaleNumber(numericValue, 3, 4);
+}
+
+function formatLswtDetailed(value) {
+    var numericValue = Number(value);
+    return isNaN(numericValue) ? "--" : formatLocaleNumber(numericValue, 3, 4);
+}
+
+function formatTsmDetailed(value) {
+    var numericValue = Number(value);
+    return isNaN(numericValue) ? "--" : formatLocaleNumber(numericValue, 3, 4);
+}
+
+function formatVariableValue(variableKey, value, useDetailed) {
+    if (variableKey === "burned_area") {
+        return useDetailed ? formatBurnedAreaHectaresDetailed(value) : formatBurnedAreaHectares(value);
+    }
+    if (variableKey === "rainfall") {
+        return useDetailed ? formatRainfallMillimetersDetailed(value) : formatRainfallMillimeters(value);
+    }
+    if (variableKey === "temperature") {
+        return useDetailed ? formatTemperatureDetailed(value) : formatTemperatureCelsius(value);
+    }
+    if (variableKey === "aod") {
+        return useDetailed ? formatAodDetailed(value) : formatAodValue(value);
+    }
+    if (variableKey === "chla") {
+        return useDetailed ? formatChlaDetailed(value) : formatChlaValue(value);
+    }
+    if (variableKey === "lake_surface_water_temperature") {
+        return useDetailed ? formatLswtDetailed(value) : formatLswtValue(value);
+    }
+    if (variableKey === "tsm") {
+        return useDetailed ? formatTsmDetailed(value) : formatTsmValue(value);
+    }
+    return value === undefined || value === null || value === "" ? "--" : String(value);
+}
+
+function formatChartTooltipValue(datasetLabel, value) {
+    if (value === null || value === undefined || isNaN(Number(value))) {
+        return datasetLabel + ": --";
+    }
+
+    var numericValue = Number(value);
+
+    if (datasetLabel.indexOf("Burned Area") !== -1) {
+        return datasetLabel + ": " + formatLocaleNumber(numericValue, 2, 4);
+    }
+
+    if (datasetLabel.indexOf("Rainfall") !== -1) {
+        return datasetLabel + ": " + formatLocaleNumber(numericValue, 3, 4);
+    }
+
+    return datasetLabel + ": " + formatLocaleNumber(numericValue, 3, 4);
+}
+
+function getLakeCciLayerConfig(variableKey) {
+    if (variableKey === "chla") {
+        return {
+            title: "CHLA Layer",
+            unit: "mg/m3",
+            minLabel: "Low",
+            maxLabel: "High",
+            colors: ["#2563eb", "#22c55e", "#fde047", "#ef4444"]
+        };
+    }
+
+    if (variableKey === "lake_surface_water_temperature") {
+        return {
+            title: "LSWT Layer",
+            unit: "\u00B0C",
+            minLabel: "Cold",
+            maxLabel: "Warm",
+            colors: ["#2563eb", "#22d3ee", "#fde047", "#f97316", "#dc2626"]
+        };
+    }
+
+    if (variableKey === "tsm") {
+        return {
+            title: "Turbidity Layer",
+            unit: "g/m3",
+            minLabel: "Clear",
+            maxLabel: "Turbid",
+            colors: ["#dbeafe", "#d6c6a5", "#8b5a2b"]
+        };
+    }
+
+    return null;
+}
+
+function interpolateHexColor(leftHex, rightHex, ratio) {
+    function hexToRgb(hex) {
+        var normalized = hex.replace("#", "");
+        return {
+            r: parseInt(normalized.slice(0, 2), 16),
+            g: parseInt(normalized.slice(2, 4), 16),
+            b: parseInt(normalized.slice(4, 6), 16)
+        };
+    }
+
+    var left = hexToRgb(leftHex);
+    var right = hexToRgb(rightHex);
+    var clampedRatio = Math.max(0, Math.min(1, ratio));
+    var red = Math.round(left.r + ((right.r - left.r) * clampedRatio));
+    var green = Math.round(left.g + ((right.g - left.g) * clampedRatio));
+    var blue = Math.round(left.b + ((right.b - left.b) * clampedRatio));
+
+    return "rgb(" + red + ", " + green + ", " + blue + ")";
+}
+
+function getInterpolatedRampColor(colors, ratio) {
+    if (!Array.isArray(colors) || !colors.length) {
+        return "#1E90FF";
+    }
+
+    if (colors.length === 1) {
+        return colors[0];
+    }
+
+    var clampedRatio = Math.max(0, Math.min(1, ratio));
+    var scaled = clampedRatio * (colors.length - 1);
+    var lowerIndex = Math.floor(scaled);
+    var upperIndex = Math.min(colors.length - 1, lowerIndex + 1);
+    var blend = scaled - lowerIndex;
+
+    return interpolateHexColor(colors[lowerIndex], colors[upperIndex], blend);
 }
 
 function getSelectedResultVariables() {
@@ -219,18 +509,61 @@ function animateResultsShell() {
 
 function formatDateWindow() {
     if (startDateInput.value && endDateInput.value) {
-        return startDateInput.value + " to " + endDateInput.value;
+        return startDateInput.value + " to " + endDateInput.value + " (" + getSelectedAggregationLabel() + ")";
     }
 
     if (startDateInput.value) {
-        return "From " + startDateInput.value;
+        return "From " + startDateInput.value + " (" + getSelectedAggregationLabel() + ")";
     }
 
     if (endDateInput.value) {
-        return "Until " + endDateInput.value;
+        return "Until " + endDateInput.value + " (" + getSelectedAggregationLabel() + ")";
     }
 
     return "--";
+}
+
+function getSelectedAggregationMode() {
+    return aggregationSelect && aggregationSelect.value ? aggregationSelect.value : "monthly";
+}
+
+function getSelectedAggregationLabel() {
+    var aggregationMode = getSelectedAggregationMode();
+
+    if (aggregationMode === "10days") {
+        return "10 Days";
+    }
+
+    if (aggregationMode === "weekly") {
+        return "Weekly";
+    }
+
+    return "Monthly";
+}
+
+function updateResultsPeriodSummary(records) {
+    if (!resultsPeriodIndicator || !resultsDebugMeta) {
+        return;
+    }
+
+    var selectedDate = startDateInput && startDateInput.value ? startDateInput.value : "--";
+    var effectiveRecordDate = records && records.length ? records[0].date : "--";
+    var aggregationLabel = getSelectedAggregationLabel();
+
+    resultsPeriodIndicator.textContent = "Selected Period: " + aggregationLabel;
+
+    resultsDebugMeta.textContent =
+        "Selected Date: " + selectedDate +
+        " | Effective Record: " + effectiveRecordDate +
+        " | Aggregation: " + aggregationLabel;
+}
+
+function logTemporalDebug(stage, payload) {
+    if (!console || typeof console.log !== "function") {
+        return;
+    }
+
+    console.log("[temporal_debug][" + stage + "]", payload);
 }
 
 function updateQuickStats(recordCount) {
@@ -457,6 +790,7 @@ function showSelectedCatchment(feature, shouldFitBounds) {
 
     activeCatchmentId = getFeatureCatchmentId(feature);
     selectedCatchmentLayer = L.geoJSON(feature, {
+        pane: "selectedCatchmentPane",
         style: function () {
             return {
                 color: "#ff916b",
@@ -540,10 +874,15 @@ function applySelectedResultVariableView(options) {
     updateSummary(currentResults, selectedVariables);
     renderChart(currentResults, selectedVariables);
     renderTable(currentResults, selectedVariables);
+    renderStatisticsSummaryTable(currentResults, selectedVariables);
 
     if (shouldSyncOverlays) {
         syncBurnedAreaOverlay();
         syncTemperatureOverlay();
+        syncAodOverlay();
+        syncLakeIndicatorLayer("chla");
+        syncLakeIndicatorLayer("lake_surface_water_temperature");
+        syncLakeIndicatorLayer("tsm");
     }
 }
 
@@ -553,7 +892,16 @@ function renderTable(data, selectedVariables) {
         return;
     }
 
-    var columns = ["catchment_id", "date"];
+    logTemporalDebug("table_input", {
+        aggregation: lastRequestedAggregation,
+        selectedDateStart: startDateInput.value,
+        selectedDateEnd: endDateInput.value,
+        recordCount: data.length,
+        dates: data.map(function (row) { return row.date; }),
+        records: data
+    });
+
+    var columns = ["lake_id", "catchment_id", "date"];
     if (hasSelectedResultVariable("burned_area", selectedVariables)) {
         columns.push("burned_area");
     }
@@ -563,26 +911,55 @@ function renderTable(data, selectedVariables) {
     if (hasSelectedResultVariable("temperature", selectedVariables)) {
         columns.push("temperature");
     }
+    if (hasSelectedResultVariable("aod", selectedVariables)) {
+        columns.push("aod");
+    }
+    if (hasSelectedResultVariable("chla", selectedVariables)) {
+        columns.push("chla");
+    }
+    if (hasSelectedResultVariable("lake_surface_water_temperature", selectedVariables)) {
+        columns.push("lake_surface_water_temperature");
+    }
+    if (hasSelectedResultVariable("tsm", selectedVariables)) {
+        columns.push("tsm");
+    }
     var header = columns.map(function (column) {
         return "<th>" + column + "</th>";
     }).join("");
 
+    header = header.replace("<th>lake_id</th>", "<th>Lake ID</th>");
     header = header.replace("<th>rainfall</th>", "<th>rainfall_mm</th>");
     header = header.replace("<th>burned_area</th>", "<th>burned_area_ha</th>");
     header = header.replace("<th>temperature</th>", "<th>temperature_c</th>");
+    header = header.replace("<th>aod</th>", "<th>aod</th>");
+    header = header.replace("<th>chla</th>", "<th>chla_mg_m3</th>");
+    header = header.replace("<th>lake_surface_water_temperature</th>", "<th>lswt_c</th>");
+    header = header.replace("<th>tsm</th>", "<th>tsm_g_m3</th>");
+
+    var isDetailedTenDayView = isTenDayAggregation();
 
     var rows = data.map(function (row) {
         return "<tr>" + columns.map(function (column) {
-            var value = row[column];
+            var rawValue = column === "lake_id" ? selectedLakeId : row[column];
+            var value = rawValue;
             if (column === "land_cover") {
                 value = getLandCoverLabel(value);
             } else if (column === "burned_area") {
-                value = value === undefined || value === null || value === "" ? "--" : formatBurnedAreaHectares(value);
+                value = value === undefined || value === null || value === ""
+                    ? "--"
+                    : (isDetailedTenDayView ? formatBurnedAreaHectaresDetailed(value) : formatBurnedAreaHectares(value));
             } else if (column === "rainfall") {
-                var rainfallMillimeters = metersToMillimeters(value);
-                value = rainfallMillimeters === null ? "--" : rainfallMillimeters.toFixed(2);
+                value = isDetailedTenDayView ? formatRainfallMillimetersDetailed(value) : formatRainfallMillimeters(value);
             } else if (column === "temperature") {
-                value = formatTemperatureCelsius(value);
+                value = isDetailedTenDayView ? formatTemperatureDetailed(value) : formatTemperatureCelsius(value);
+            } else if (column === "aod") {
+                value = isDetailedTenDayView ? formatAodDetailed(value) : formatAodValue(value);
+            } else if (column === "chla") {
+                value = isDetailedTenDayView ? formatChlaDetailed(value) : formatChlaValue(value);
+            } else if (column === "lake_surface_water_temperature") {
+                value = isDetailedTenDayView ? formatLswtDetailed(value) : formatLswtValue(value);
+            } else if (column === "tsm") {
+                value = isDetailedTenDayView ? formatTsmDetailed(value) : formatTsmValue(value);
             } else if (value === undefined || value === null || value === "") {
                 value = "--";
             }
@@ -592,48 +969,275 @@ function renderTable(data, selectedVariables) {
 
     tableContainer.innerHTML =
         "<table><thead><tr>" + header + "</tr></thead><tbody>" + rows + "</tbody></table>";
+
+    if (data.length) {
+        var firstRenderedRow = tableContainer.querySelector("tbody tr");
+        var domValuesByColumn = {};
+
+        if (firstRenderedRow) {
+            Array.prototype.slice.call(firstRenderedRow.children).forEach(function (cell, index) {
+                domValuesByColumn[columns[index]] = cell.textContent;
+            });
+        }
+
+        logTemporalDebug("table_dom_values", {
+            selectedDate: startDateInput.value,
+            effectiveRecordDate: data[0].date,
+            aggregation: lastRequestedAggregation,
+            apiValues: {
+                burned_area: data[0].burned_area,
+                rainfall: data[0].rainfall,
+                temperature: data[0].temperature,
+                aod: data[0].aod,
+                chla: data[0].chla,
+                lake_surface_water_temperature: data[0].lake_surface_water_temperature,
+                tsm: data[0].tsm
+            },
+            renderTableRow: data[0],
+            domValuesByColumn: domValuesByColumn
+        });
+    }
 }
 
-function updateSummary(data, selectedVariables) {
-    if (!data.length) {
-        avgBurnedArea.textContent = "--";
-        avgRainfall.textContent = "--";
-        avgTemperature.textContent = "--";
-        dominantLandCover.textContent = "--";
-        return;
-    }
-
-    var burnedAreaMean = data.reduce(function (sum, row) {
-        return sum + Number(row.burned_area || 0);
-    }, 0) / data.length;
-
-    var rainfallMean = data.reduce(function (sum, row) {
-        return sum + Number(row.rainfall || 0);
-    }, 0) / data.length;
-
-    var temperatureRows = data
+function getNumericValues(data, fieldName) {
+    return data
         .map(function (row) {
-            return Number(row.temperature);
+            return Number(row[fieldName]);
         })
         .filter(function (value) {
             return !isNaN(value);
         });
+}
 
-    var temperatureMean = temperatureRows.length
-        ? temperatureRows.reduce(function (sum, value) {
-            return sum + value;
-        }, 0) / temperatureRows.length
-        : null;
+function computeDescriptiveStats(values) {
+    if (!values.length) {
+        return null;
+    }
 
-    avgBurnedArea.textContent = hasSelectedResultVariable("burned_area", selectedVariables)
-        ? formatBurnedAreaHectares(burnedAreaMean)
-        : "--";
-    avgRainfall.textContent = hasSelectedResultVariable("rainfall", selectedVariables)
-        ? metersToMillimeters(rainfallMean).toFixed(2)
-        : "--";
-    avgTemperature.textContent = hasSelectedResultVariable("temperature", selectedVariables)
-        ? (temperatureMean === null ? "--" : formatTemperatureCelsius(temperatureMean))
-        : "--";
+    var sortedValues = values.slice().sort(function (left, right) {
+        return left - right;
+    });
+    var count = sortedValues.length;
+    var mean = sortedValues.reduce(function (sum, value) {
+        return sum + value;
+    }, 0) / count;
+    var midpoint = Math.floor(count / 2);
+    var median = count % 2 === 0
+        ? (sortedValues[midpoint - 1] + sortedValues[midpoint]) / 2
+        : sortedValues[midpoint];
+    var variance = sortedValues.reduce(function (sum, value) {
+        var delta = value - mean;
+        return sum + delta * delta;
+    }, 0) / count;
+
+    return {
+        mean: mean,
+        median: median,
+        stdDev: Math.sqrt(variance)
+    };
+}
+
+function getCurrentLakeLayerMeanValue(variableKey) {
+    var values = getNumericValues(currentResults, variableKey);
+    var stats = computeDescriptiveStats(values);
+    return stats ? stats.mean : null;
+}
+
+function getLakeLayerDisplayValue(variableKey, value) {
+    return formatVariableValue(variableKey, value, true);
+}
+
+function getLakeLayerStyle(variableKey, value) {
+    var config = getLakeCciLayerConfig(variableKey);
+    if (!config || value === null || value === undefined || isNaN(Number(value))) {
+        return {
+            color: "#94a3b8",
+            weight: 2,
+            fillColor: "#cbd5e1",
+            fillOpacity: 0.75
+        };
+    }
+
+    var numericValue = Number(value);
+    var magnitude = Math.abs(numericValue);
+    var ratio = magnitude <= 1e-12 ? 0.5 : Math.max(0.12, Math.min(1, 0.35 + (magnitude / (magnitude + 1))));
+
+    return {
+        color: "#0f172a",
+        weight: 2.2,
+        fillColor: getInterpolatedRampColor(config.colors, ratio),
+        fillOpacity: 0.78
+    };
+}
+
+function getMetricSummaryConfig(useDetailedTenDayFormatting) {
+    return [
+        {
+            key: "burned_area",
+            field: "burned_area",
+            label: "Burned Area (ha)",
+            formatter: useDetailedTenDayFormatting ? formatBurnedAreaHectaresDetailed : formatBurnedAreaHectares,
+            elements: {
+                mean: avgBurnedArea,
+                median: medianBurnedArea,
+                std: stdBurnedArea
+            }
+        },
+        {
+            key: "rainfall",
+            field: "rainfall",
+            label: "Rainfall (mm)",
+            formatter: useDetailedTenDayFormatting ? formatRainfallMillimetersDetailed : formatRainfallMillimeters,
+            elements: {
+                mean: avgRainfall,
+                median: medianRainfall,
+                std: stdRainfall
+            }
+        },
+        {
+            key: "temperature",
+            field: "temperature",
+            label: "Temperature (\u00B0C)",
+            formatter: useDetailedTenDayFormatting ? formatTemperatureDetailed : formatTemperatureCelsius,
+            elements: {
+                mean: avgTemperature,
+                median: medianTemperature,
+                std: stdTemperature
+            }
+        },
+        {
+            key: "aod",
+            field: "aod",
+            label: "AOD",
+            formatter: useDetailedTenDayFormatting ? formatAodDetailed : formatAodValue,
+            elements: {
+                mean: avgAod,
+                median: medianAod,
+                std: stdAod
+            }
+        },
+        {
+            key: "chla",
+            field: "chla",
+            label: "Chlorophyll-a (mg/m3)",
+            formatter: useDetailedTenDayFormatting ? formatChlaDetailed : formatChlaValue,
+            elements: {
+                mean: avgChla,
+                median: medianChla,
+                std: stdChla
+            }
+        },
+        {
+            key: "lake_surface_water_temperature",
+            field: "lake_surface_water_temperature",
+            label: "LSWT (\u00B0C)",
+            formatter: useDetailedTenDayFormatting ? formatLswtDetailed : formatLswtValue,
+            elements: {
+                mean: avgLswt,
+                median: medianLswt,
+                std: stdLswt
+            }
+        },
+        {
+            key: "tsm",
+            field: "tsm",
+            label: "Turbidity Proxy (g/m3)",
+            formatter: useDetailedTenDayFormatting ? formatTsmDetailed : formatTsmValue,
+            elements: {
+                mean: avgTsm,
+                median: medianTsm,
+                std: stdTsm
+            }
+        }
+    ];
+}
+
+function buildStatisticsSummaryRows(data, selectedVariables) {
+    return getMetricSummaryConfig(isTenDayAggregation())
+        .filter(function (config) {
+            return hasSelectedResultVariable(config.key, selectedVariables);
+        })
+        .map(function (config) {
+            var stats = computeDescriptiveStats(getNumericValues(data, config.field));
+            return {
+                variable: config.label,
+                mean: stats ? config.formatter(stats.mean) : "--",
+                median: stats ? config.formatter(stats.median) : "--",
+                stdDev: stats ? config.formatter(stats.stdDev) : "--"
+            };
+        });
+}
+
+function setKpiStatisticTriplet(elements, stats, formatter, isVisible) {
+    var fallbackValue = "--";
+    var meanValue = isVisible && stats ? formatter(stats.mean) : fallbackValue;
+    var medianValue = isVisible && stats ? formatter(stats.median) : fallbackValue;
+    var stdValue = isVisible && stats ? formatter(stats.stdDev) : fallbackValue;
+
+    elements.mean.textContent = meanValue;
+    elements.median.textContent = medianValue;
+    elements.std.textContent = stdValue;
+}
+
+function updateSummary(data, selectedVariables) {
+    var metricConfig = getMetricSummaryConfig(isTenDayAggregation());
+
+    metricConfig.forEach(function (config) {
+        var stats = computeDescriptiveStats(getNumericValues(data, config.field));
+        setKpiStatisticTriplet(
+            config.elements,
+            stats,
+            config.formatter,
+            data.length && hasSelectedResultVariable(config.key, selectedVariables)
+        );
+    });
+
+    logTemporalDebug("kpi_input", {
+        aggregation: lastRequestedAggregation,
+        selectedDateStart: startDateInput.value,
+        selectedDateEnd: endDateInput.value,
+        recordCount: data.length,
+        records: data
+    });
+
+    if (data.length) {
+        logTemporalDebug("kpi_dom_values", {
+            selectedDate: startDateInput.value,
+            effectiveRecordDate: data[0].date,
+            aggregation: lastRequestedAggregation,
+            apiValues: {
+                burned_area: data[0].burned_area,
+                rainfall: data[0].rainfall,
+                temperature: data[0].temperature,
+                aod: data[0].aod,
+                chla: data[0].chla,
+                lake_surface_water_temperature: data[0].lake_surface_water_temperature,
+                tsm: data[0].tsm
+            },
+            displayedValues: {
+                burned_area_mean: avgBurnedArea ? avgBurnedArea.textContent : null,
+                rainfall_mean: avgRainfall ? avgRainfall.textContent : null,
+                temperature_mean: avgTemperature ? avgTemperature.textContent : null,
+                aod_mean: avgAod ? avgAod.textContent : null,
+                chla_mean: avgChla ? avgChla.textContent : null,
+                lswt_mean: avgLswt ? avgLswt.textContent : null,
+                tsm_mean: avgTsm ? avgTsm.textContent : null,
+                burned_area_median: medianBurnedArea ? medianBurnedArea.textContent : null,
+                rainfall_median: medianRainfall ? medianRainfall.textContent : null,
+                temperature_median: medianTemperature ? medianTemperature.textContent : null,
+                aod_median: medianAod ? medianAod.textContent : null,
+                chla_median: medianChla ? medianChla.textContent : null,
+                lswt_median: medianLswt ? medianLswt.textContent : null,
+                tsm_median: medianTsm ? medianTsm.textContent : null
+            },
+            preciseBurnedAreaDisplay: formatBurnedAreaHectaresPrecise(data[0].burned_area)
+        });
+    }
+
+    if (!data.length) {
+        dominantLandCover.textContent = "--";
+        return;
+    }
 
     var landCoverCounts = {};
 
@@ -655,6 +1259,41 @@ function updateSummary(data, selectedVariables) {
     dominantLandCover.textContent = dominantLandCoverId
         ? getLandCoverLabel(dominantLandCoverId)
         : "N/A";
+}
+
+function renderStatisticsSummaryTable(data, selectedVariables) {
+    if (!statisticsTableContainer) {
+        return;
+    }
+
+    if (!data.length) {
+        statisticsTableContainer.innerHTML = '<p class="placeholder">Statistics summary will appear here.</p>';
+        return;
+    }
+
+    var summaryRows = buildStatisticsSummaryRows(data, selectedVariables);
+
+    if (!summaryRows.length) {
+        statisticsTableContainer.innerHTML = '<p class="placeholder">No variable statistics available for the current selection.</p>';
+        return;
+    }
+
+    var rows = summaryRows.map(function (row) {
+        return "<tr>" +
+            "<td>" + row.variable + "</td>" +
+            "<td>" + row.mean + "</td>" +
+            "<td>" + row.median + "</td>" +
+            "<td>" + row.stdDev + "</td>" +
+            "</tr>";
+    }).join("");
+
+    statisticsTableContainer.innerHTML =
+        "<table><thead><tr>" +
+        "<th>Variable</th>" +
+        "<th>Mean</th>" +
+        "<th>Median</th>" +
+        "<th>Standard Deviation</th>" +
+        "</tr></thead><tbody>" + rows + "</tbody></table>";
 }
 
 function updateLakeSummary(summary) {
@@ -682,7 +1321,8 @@ function renderChart(data, selectedVariables) {
     });
 
     var burnedArea = data.map(function (row) {
-        return row.burned_area;
+        var hectaresValue = squareMetersToHectares(row.burned_area);
+        return hectaresValue === null ? null : hectaresValue;
     });
 
     var rainfall = data.map(function (row) {
@@ -693,6 +1333,40 @@ function renderChart(data, selectedVariables) {
     var temperature = data.map(function (row) {
         var numericValue = Number(row.temperature);
         return isNaN(numericValue) ? null : numericValue;
+    });
+
+    var aod = data.map(function (row) {
+        var numericValue = Number(row.aod);
+        return isNaN(numericValue) ? null : numericValue;
+    });
+
+    var chla = data.map(function (row) {
+        var numericValue = Number(row.chla);
+        return isNaN(numericValue) ? null : numericValue;
+    });
+
+    var lswt = data.map(function (row) {
+        var numericValue = Number(row.lake_surface_water_temperature);
+        return isNaN(numericValue) ? null : numericValue;
+    });
+
+    var tsm = data.map(function (row) {
+        var numericValue = Number(row.tsm);
+        return isNaN(numericValue) ? null : numericValue;
+    });
+
+    logTemporalDebug("chart_input", {
+        aggregation: lastRequestedAggregation,
+        selectedDateStart: startDateInput.value,
+        selectedDateEnd: endDateInput.value,
+        labels: labels,
+        burnedArea: burnedArea,
+        rainfall: rainfall,
+        temperature: temperature,
+        aod: aod,
+        chla: chla,
+        lswt: lswt,
+        tsm: tsm
     });
 
     if (resultsChart) {
@@ -832,6 +1506,162 @@ function renderChart(data, selectedVariables) {
         };
     }
 
+    if (hasSelectedResultVariable("aod", selectedVariables)) {
+        datasets.push({
+            label: "AOD",
+            data: aod,
+            borderColor: "#8b5cf6",
+            backgroundColor: "rgba(139, 92, 246, 0.12)",
+            borderWidth: 3,
+            pointRadius: 2,
+            pointHoverRadius: 5,
+            tension: 0.35,
+            yAxisID: "y3"
+        });
+        scales.y3 = {
+            position: "right",
+            offset: true,
+            grid: {
+                drawOnChartArea: false
+            },
+            title: {
+                display: true,
+                text: "AOD",
+                color: chartTextColor,
+                font: {
+                    family: chartFontFamily,
+                    size: 11,
+                    weight: 700
+                }
+            },
+            ticks: {
+                color: chartTextColor,
+                font: {
+                    family: chartFontFamily,
+                    size: 11,
+                    weight: 600
+                }
+            }
+        };
+    }
+
+    if (hasSelectedResultVariable("chla", selectedVariables)) {
+        datasets.push({
+            label: "Chlorophyll-a (mg/m3)",
+            data: chla,
+            borderColor: "#0f766e",
+            backgroundColor: "rgba(15, 118, 110, 0.12)",
+            borderWidth: 3,
+            pointRadius: 2,
+            pointHoverRadius: 5,
+            tension: 0.35,
+            yAxisID: "y4"
+        });
+        scales.y4 = {
+            position: "left",
+            offset: true,
+            grid: {
+                drawOnChartArea: false
+            },
+            title: {
+                display: true,
+                text: "Chlorophyll-a (mg/m3)",
+                color: chartTextColor,
+                font: {
+                    family: chartFontFamily,
+                    size: 11,
+                    weight: 700
+                }
+            },
+            ticks: {
+                color: chartTextColor,
+                font: {
+                    family: chartFontFamily,
+                    size: 11,
+                    weight: 600
+                }
+            }
+        };
+    }
+
+    if (hasSelectedResultVariable("lake_surface_water_temperature", selectedVariables)) {
+        datasets.push({
+            label: "LSWT (\u00B0C)",
+            data: lswt,
+            borderColor: "#dc2626",
+            backgroundColor: "rgba(220, 38, 38, 0.12)",
+            borderWidth: 3,
+            pointRadius: 2,
+            pointHoverRadius: 5,
+            tension: 0.35,
+            yAxisID: "y5"
+        });
+        scales.y5 = {
+            position: "right",
+            offset: true,
+            grid: {
+                drawOnChartArea: false
+            },
+            title: {
+                display: true,
+                text: "LSWT (\u00B0C)",
+                color: chartTextColor,
+                font: {
+                    family: chartFontFamily,
+                    size: 11,
+                    weight: 700
+                }
+            },
+            ticks: {
+                color: chartTextColor,
+                font: {
+                    family: chartFontFamily,
+                    size: 11,
+                    weight: 600
+                }
+            }
+        };
+    }
+
+    if (hasSelectedResultVariable("tsm", selectedVariables)) {
+        datasets.push({
+            label: "Turbidity Proxy (g/m3)",
+            data: tsm,
+            borderColor: "#7c3aed",
+            backgroundColor: "rgba(124, 58, 237, 0.12)",
+            borderWidth: 3,
+            pointRadius: 2,
+            pointHoverRadius: 5,
+            tension: 0.35,
+            yAxisID: "y6"
+        });
+        scales.y6 = {
+            position: "left",
+            offset: true,
+            grid: {
+                drawOnChartArea: false
+            },
+            title: {
+                display: true,
+                text: "Turbidity Proxy (g/m3)",
+                color: chartTextColor,
+                font: {
+                    family: chartFontFamily,
+                    size: 11,
+                    weight: 700
+                }
+            },
+            ticks: {
+                color: chartTextColor,
+                font: {
+                    family: chartFontFamily,
+                    size: 11,
+                    weight: 600
+                }
+            }
+        };
+    }
+
     resultsChart = new Chart(ctx, {
         type: "line",
         data: {
@@ -862,6 +1692,13 @@ function renderChart(data, selectedVariables) {
                             weight: 700
                         }
                     }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function (context) {
+                            return formatChartTooltipValue(context.dataset.label || "Value", context.parsed.y);
+                        }
+                    }
                 }
             }
         }
@@ -889,6 +1726,54 @@ function removeTemperatureOverlay() {
     if (temperatureLegend) {
         map.removeControl(temperatureLegend);
         temperatureLegend = null;
+    }
+}
+
+function removeAodOverlay() {
+    if (aodOverlay) {
+        map.removeLayer(aodOverlay);
+        aodOverlay = null;
+    }
+
+    if (aodLegend) {
+        map.removeControl(aodLegend);
+        aodLegend = null;
+    }
+}
+
+function removeChlaLayer() {
+    if (chlaLayer) {
+        map.removeLayer(chlaLayer);
+        chlaLayer = null;
+    }
+
+    if (chlaLegend) {
+        map.removeControl(chlaLegend);
+        chlaLegend = null;
+    }
+}
+
+function removeLswtLayer() {
+    if (lswtLayer) {
+        map.removeLayer(lswtLayer);
+        lswtLayer = null;
+    }
+
+    if (lswtLegend) {
+        map.removeControl(lswtLegend);
+        lswtLegend = null;
+    }
+}
+
+function removeTsmLayer() {
+    if (tsmLayer) {
+        map.removeLayer(tsmLayer);
+        tsmLayer = null;
+    }
+
+    if (tsmLegend) {
+        map.removeControl(tsmLegend);
+        tsmLegend = null;
     }
 }
 
@@ -976,6 +1861,34 @@ function removeLakesLayer() {
     }
 }
 
+function removeSelectedLakeHighlightLayer() {
+    if (selectedLakeHighlightLayer) {
+        map.removeLayer(selectedLakeHighlightLayer);
+        selectedLakeHighlightLayer = null;
+    }
+}
+
+function syncSelectedLakeHighlightLayer() {
+    removeSelectedLakeHighlightLayer();
+
+    if (!selectedLakeFeature || !selectedLakeId) {
+        return;
+    }
+
+    selectedLakeHighlightLayer = L.geoJSON(selectedLakeFeature, {
+        pane: "selectedLakePane",
+        style: function () {
+            return {
+                color: "#0f4c81",
+                weight: 2.8,
+                fillColor: "#1E90FF",
+                fillOpacity: 0.08
+            };
+        },
+        interactive: false
+    }).addTo(map);
+}
+
 function syncLakesLayer() {
     removeLakesLayer();
 
@@ -988,6 +1901,7 @@ function syncLakesLayer() {
     }
 
     lakesLayer = L.geoJSON(lakesGeoJsonData, {
+        pane: "lakesPane",
         style: function () {
             return {
                 color: "#1E90FF",
@@ -1020,10 +1934,12 @@ function applyLakeSelection(selectionPayload) {
     selectedLakeId = selectionPayload && selectionPayload.lake_id ? String(selectionPayload.lake_id) : null;
     selectedLakeCatchmentId = selectionPayload && selectionPayload.catchment_id ? String(selectionPayload.catchment_id) : null;
     selectedLakeLabel = selectionPayload && selectionPayload.lake_label ? selectionPayload.lake_label : null;
+    selectedLakeFeature = selectionPayload && selectionPayload.lake ? selectionPayload.lake : null;
 
     setSelectedLakeDisplay(selectedLakeLabel);
     updateRunButtonState();
     updateLakeOverviewSelection();
+    syncSelectedLakeHighlightLayer();
 
     if (!selectedLakeCatchmentId) {
         catchmentSelect.innerHTML = '<option value="">No matching catchment</option>';
@@ -1047,7 +1963,7 @@ function applyLakeSelection(selectionPayload) {
 }
 
 function handleLakeSelection(lakeId) {
-    fetch("http://127.0.0.1:5000/lake-selection?lake_id=" + encodeURIComponent(lakeId))
+    fetch(buildApiUrl("/lake-selection?lake_id=" + encodeURIComponent(lakeId)))
         .then(function (response) {
             if (!response.ok) {
                 throw new Error("Failed to map lake to catchment");
@@ -1065,7 +1981,7 @@ function handleLakeSelection(lakeId) {
 }
 
 function loadLakesOverview() {
-    return fetch("http://127.0.0.1:5000/lakes-overview")
+    return fetch(buildApiUrl("/lakes-overview"))
         .then(function (response) {
             if (!response.ok) {
                 throw new Error("Failed to fetch lakes overview");
@@ -1078,6 +1994,7 @@ function loadLakesOverview() {
             }
 
             lakesOverviewLayer = L.geoJSON(data, {
+                pane: "lakesPane",
                 style: function () {
                     return getLakeStyle();
                 },
@@ -1119,10 +2036,12 @@ function loadLakesOverview() {
                 }
             }).addTo(map);
 
-            map.fitBounds(lakesOverviewLayer.getBounds(), {
-                paddingTopLeft: [24, 80],
-                paddingBottomRight: [24, 24]
-            });
+            if (!hasAoiMapView) {
+                map.fitBounds(lakesOverviewLayer.getBounds(), {
+                    paddingTopLeft: [24, 80],
+                    paddingBottomRight: [24, 24]
+                });
+            }
             setStatus("Lakes loaded. Select a lake on the map to begin.", false);
         });
 }
@@ -1166,6 +2085,64 @@ function addTemperatureLegend(legendConfig) {
             max_label: "Hot",
             colors: ["#313695", "#4575b4", "#74add1", "#fee090", "#f46d43", "#a50026"],
             extraClassName: "temperature-legend"
+        }
+    );
+}
+
+function addAodLegend(legendConfig) {
+    if (!legendConfig || legendConfig.has_data === false) {
+        return;
+    }
+
+    if (aodLegend) {
+        map.removeControl(aodLegend);
+        aodLegend = null;
+    }
+
+    var normalizedLegendConfig = Object.assign({}, legendConfig, {
+        position: "bottomright",
+        title: "AOD Concentration",
+        unit: null,
+        min_label: "Low",
+        max_label: "High",
+        colors: ["#3182bd", "#41b6c4", "#7fcdbb", "#ffffb3", "#fdae61", "#d7191c"]
+    });
+
+    aodLegend = addGradientLegendControl(
+        normalizedLegendConfig,
+        {
+            position: "bottomright",
+            title: "AOD Concentration",
+            unit: null,
+            min_label: "Low",
+            max_label: "High",
+            colors: ["#3182bd", "#41b6c4", "#7fcdbb", "#ffffb3", "#fdae61", "#d7191c"]
+        }
+    );
+}
+
+function addLakeCciLegend(variableKey) {
+    var config = getLakeCciLayerConfig(variableKey);
+    if (!config) {
+        return null;
+    }
+
+    return addGradientLegendControl(
+        {
+            position: "bottomright",
+            title: config.title,
+            unit: config.unit,
+            min_label: config.minLabel,
+            max_label: config.maxLabel,
+            colors: config.colors
+        },
+        {
+            position: "bottomright",
+            title: config.title,
+            unit: config.unit,
+            min_label: config.minLabel,
+            max_label: config.maxLabel,
+            colors: config.colors
         }
     );
 }
@@ -1230,6 +2207,7 @@ function syncBurnedAreaOverlay() {
         burnedAreaOverlayData.image_url,
         burnedAreaOverlayData.bounds,
         {
+            pane: "burnedPane",
             opacity: 0,
             interactive: false,
             crossOrigin: true,
@@ -1270,6 +2248,7 @@ function syncTemperatureOverlay() {
         temperatureOverlayData.image_url,
         temperatureOverlayData.bounds,
         {
+            pane: "temperaturePane",
             opacity: 0,
             interactive: false,
             crossOrigin: true,
@@ -1290,6 +2269,114 @@ function syncTemperatureOverlay() {
     }
 }
 
+function syncAodOverlay() {
+    removeAodOverlay();
+
+    if (!hasSelectedResultVariable("aod")) {
+        return;
+    }
+
+    if (!aodOverlayData || !aodOverlayToggle || !aodOverlayToggle.checked || !hasCompletedAnalysis) {
+        return;
+    }
+
+    if (!aodOverlayData.image_url || !aodOverlayData.bounds) {
+        return;
+    }
+
+    aodOverlay = L.imageOverlay(
+        aodOverlayData.image_url,
+        aodOverlayData.bounds,
+        {
+            pane: "aodPane",
+            opacity: 0,
+            interactive: false,
+            crossOrigin: true,
+            className: "burned-area-overlay"
+        }
+    );
+
+    aodOverlay.once("load", function () {
+        aodOverlay.setOpacity(aodOverlayData.opacity || 0.62);
+    });
+
+    aodOverlay.addTo(map);
+    if (aodOverlayData.has_aod_data && aodOverlayData.legend) {
+        var legendConfig = Object.assign({}, aodOverlayData.legend, {
+            has_data: aodOverlayData.has_aod_data
+        });
+        addAodLegend(legendConfig);
+    }
+}
+
+function syncLakeIndicatorLayer(variableKey) {
+    var removeLayerFn;
+    var toggle;
+    var overlayData = null;
+    var paneName;
+    if (variableKey === "chla") {
+        removeLayerFn = removeChlaLayer;
+        toggle = chlaLayerToggle;
+        overlayData = chlaOverlayData;
+        paneName = "lakeCciChlaPane";
+    } else if (variableKey === "lake_surface_water_temperature") {
+        removeLayerFn = removeLswtLayer;
+        toggle = lswtLayerToggle;
+        overlayData = lswtOverlayData;
+        paneName = "lakeCciLswtPane";
+    } else if (variableKey === "tsm") {
+        removeLayerFn = removeTsmLayer;
+        toggle = tsmLayerToggle;
+        overlayData = tsmOverlayData;
+        paneName = "lakeCciTsmPane";
+    } else {
+        return;
+    }
+
+    removeLayerFn();
+
+    if (!hasSelectedResultVariable(variableKey)) {
+        return;
+    }
+
+    if (!overlayData || !toggle || !toggle.checked || !hasCompletedAnalysis) {
+        return;
+    }
+
+    if (!overlayData.image_url || !overlayData.bounds) {
+        return;
+    }
+
+    var overlayLayer = L.imageOverlay(
+        overlayData.image_url,
+        overlayData.bounds,
+        {
+            pane: paneName,
+            opacity: 0,
+            interactive: false,
+            crossOrigin: true,
+            className: "burned-area-overlay"
+        }
+    );
+
+    overlayLayer.once("load", function () {
+        overlayLayer.setOpacity(overlayData.opacity || 0.82);
+    });
+
+    overlayLayer.addTo(map);
+
+    if (variableKey === "chla") {
+        chlaLayer = overlayLayer;
+        chlaLegend = overlayData.legend && overlayData.has_data ? addLakeCciLegend(variableKey) : null;
+    } else if (variableKey === "lake_surface_water_temperature") {
+        lswtLayer = overlayLayer;
+        lswtLegend = overlayData.legend && overlayData.has_data ? addLakeCciLegend(variableKey) : null;
+    } else if (variableKey === "tsm") {
+        tsmLayer = overlayLayer;
+        tsmLegend = overlayData.legend && overlayData.has_data ? addLakeCciLegend(variableKey) : null;
+    }
+}
+
 function resetResults(shouldInvalidateRequest) {
     if (shouldInvalidateRequest !== false) {
         currentRequestId += 1;
@@ -1299,14 +2386,27 @@ function resetResults(shouldInvalidateRequest) {
     hasCompletedAnalysis = false;
     burnedAreaOverlayData = null;
     temperatureOverlayData = null;
+    aodOverlayData = null;
+    chlaOverlayData = null;
+    lswtOverlayData = null;
+    tsmOverlayData = null;
     lakesGeoJsonData = null;
     removeBurnedAreaOverlay();
     removeTemperatureOverlay();
+    removeAodOverlay();
+    removeChlaLayer();
+    removeLswtLayer();
+    removeTsmLayer();
+    removeSelectedLakeHighlightLayer();
     removeLandcoverLegend();
     removeLakesLayer();
     tableContainer.innerHTML = '<p class="placeholder">Results will appear here.</p>';
+    if (statisticsTableContainer) {
+        statisticsTableContainer.innerHTML = '<p class="placeholder">Statistics summary will appear here.</p>';
+    }
     updateSummary([], getSelectedResultVariables());
     updateLakeSummary(null);
+    updateResultsPeriodSummary([]);
 
     if (resultsChart) {
         resultsChart.destroy();
@@ -1323,15 +2423,30 @@ function resetResults(shouldInvalidateRequest) {
     });
 }
 
-function renderResults(data, overlay, temperatureOverlayPayload, lakesData, summary, requestedVariables) {
+function renderResults(data, overlay, temperatureOverlayPayload, aodOverlayPayload, chlaOverlayPayload, lswtOverlayPayload, tsmOverlayPayload, lakesData, summary, requestedVariables) {
     currentResults = data.slice();
     hasCompletedAnalysis = true;
     burnedAreaOverlayData = overlay || null;
     temperatureOverlayData = temperatureOverlayPayload || null;
+    aodOverlayData = aodOverlayPayload || null;
+    chlaOverlayData = chlaOverlayPayload || null;
+    lswtOverlayData = lswtOverlayPayload || null;
+    tsmOverlayData = tsmOverlayPayload || null;
     lakesGeoJsonData = lakesData || null;
     lastRequestedVariables = requestedVariables && requestedVariables.length
         ? requestedVariables.slice()
         : getSelectedResultVariables();
+
+    logTemporalDebug("api_response", {
+        aggregation: lastRequestedAggregation,
+        selectedDateStart: startDateInput.value,
+        selectedDateEnd: endDateInput.value,
+        recordCount: data.length,
+        dates: data.map(function (row) { return row.date; }),
+        records: data
+    });
+    updateResultsPeriodSummary(data);
+
     setResetButtonVisible(true);
     syncLakesLayer();
     syncLandcoverLegend();
@@ -1373,14 +2488,19 @@ function exportResultsAsCsv() {
     }
 
     var selectedVariables = getSelectedResultVariables();
+    var selectedLakeIdentifier = selectedLakeId || "";
+    var aggregationLevel = lastRequestedAggregation || getSelectedAggregationMode();
+    var statisticsSummaryRows = buildStatisticsSummaryRows(currentResults, selectedVariables);
     var exportRows = currentResults.map(function (row) {
         var formattedRow = {
+            lake_id: selectedLakeIdentifier,
             catchment_id: row.catchment_id,
-            date: row.date
+            date: row.date,
+            aggregation_level: aggregationLevel
         };
 
         if (hasSelectedResultVariable("burned_area", selectedVariables)) {
-            formattedRow.burned_area = row.burned_area;
+            formattedRow.burned_area_ha = squareMetersToHectares(row.burned_area);
         }
 
         if (hasSelectedResultVariable("rainfall", selectedVariables)) {
@@ -1390,7 +2510,31 @@ function exportResultsAsCsv() {
         if (hasSelectedResultVariable("temperature", selectedVariables)) {
             formattedRow.temperature = row.temperature;
         }
+
+        if (hasSelectedResultVariable("aod", selectedVariables)) {
+            formattedRow.aod = row.aod;
+        }
+
+        if (hasSelectedResultVariable("chla", selectedVariables)) {
+            formattedRow.chla = row.chla;
+        }
+
+        if (hasSelectedResultVariable("lake_surface_water_temperature", selectedVariables)) {
+            formattedRow.lake_surface_water_temperature = row.lake_surface_water_temperature;
+        }
+
+        if (hasSelectedResultVariable("tsm", selectedVariables)) {
+            formattedRow.tsm = row.tsm;
+        }
         return formattedRow;
+    });
+
+    logTemporalDebug("csv_export", {
+        aggregation: aggregationLevel,
+        selectedDateStart: startDateInput.value,
+        selectedDateEnd: endDateInput.value,
+        recordCount: exportRows.length,
+        records: exportRows
     });
 
     var columns = Object.keys(exportRows[0]);
@@ -1405,6 +2549,22 @@ function exportResultsAsCsv() {
         });
         csvLines.push(values.join(","));
     });
+
+    if (statisticsSummaryRows.length) {
+        csvLines.push("");
+        csvLines.push("Statistics Summary");
+        csvLines.push(["Variable", "Mean", "Median", "Standard Deviation"].join(","));
+        statisticsSummaryRows.forEach(function (row) {
+            csvLines.push([
+                row.variable,
+                row.mean,
+                row.median,
+                row.stdDev
+            ].map(function (value) {
+                return '"' + String(value).replace(/"/g, '""') + '"';
+            }).join(","));
+        });
+    }
 
     var blob = new Blob([csvLines.join("\n")], { type: "text/csv;charset=utf-8;" });
     var url = URL.createObjectURL(blob);
@@ -1426,7 +2586,7 @@ function addLandcoverOverlay() {
 }
 
 function loadLandCoverLookup() {
-    return fetch("http://127.0.0.1:5000/land-cover")
+    return fetch(buildApiUrl("/land-cover"))
         .then(function (response) {
             if (!response.ok) {
                 throw new Error("Failed to fetch land cover lookup");
@@ -1460,9 +2620,34 @@ function loadCatchmentIdMap() {
         });
 }
 
+function loadAoiBounds() {
+    return fetch("data/aoi.geojson")
+        .then(function (response) {
+            if (!response.ok) {
+                throw new Error("Failed to fetch AOI");
+            }
+            return response.json();
+        })
+        .then(function (data) {
+            var aoiLayer = L.geoJSON(data);
+            var bounds = aoiLayer.getBounds();
+
+            if (bounds.isValid()) {
+                map.fitBounds(bounds, {
+                    paddingTopLeft: [24, 80],
+                    paddingBottomRight: [24, 24]
+                });
+                hasAoiMapView = true;
+            }
+        })
+        .catch(function (error) {
+            console.warn("AOI unavailable:", error);
+        });
+}
+
 function loadCatchmentsGeoJSON() {
     Promise.all([
-        fetch("data/catchments.geojson")
+        fetch("data/catchments_aoi.geojson")
             .then(function (response) {
                 if (!response.ok) {
                     throw new Error("Failed to fetch GeoJSON");
@@ -1525,6 +2710,12 @@ function handleDateChange() {
     setStatus("Dates changed. Run analysis to load updated results.", false);
 }
 
+function handleAggregationChange() {
+    resetResults();
+    updateQuickStats(null);
+    setStatus("Temporal aggregation updated. Run analysis to load resampled results.", false);
+}
+
 function handleResultVariableChange(event) {
     if (!enforceResultVariableSelection(event && event.target ? event.target : null)) {
         updateRunButtonState();
@@ -1558,6 +2749,9 @@ function handleResultVariableChange(event) {
 catchmentSelect.addEventListener("change", handleFilterChange);
 startDateInput.addEventListener("change", handleDateChange);
 endDateInput.addEventListener("change", handleDateChange);
+if (aggregationSelect) {
+    aggregationSelect.addEventListener("change", handleAggregationChange);
+}
 resultVariableInputs.forEach(function (input) {
     input.addEventListener("change", handleResultVariableChange);
 });
@@ -1574,6 +2768,28 @@ if (temperatureOverlayToggle) {
     temperatureOverlayToggle.addEventListener("change", syncTemperatureOverlay);
 }
 
+if (aodOverlayToggle) {
+    aodOverlayToggle.addEventListener("change", syncAodOverlay);
+}
+
+if (chlaLayerToggle) {
+    chlaLayerToggle.addEventListener("change", function () {
+        syncLakeIndicatorLayer("chla");
+    });
+}
+
+if (lswtLayerToggle) {
+    lswtLayerToggle.addEventListener("change", function () {
+        syncLakeIndicatorLayer("lake_surface_water_temperature");
+    });
+}
+
+if (tsmLayerToggle) {
+    tsmLayerToggle.addEventListener("change", function () {
+        syncLakeIndicatorLayer("tsm");
+    });
+}
+
 if (resetAnalysisButton) {
     resetAnalysisButton.addEventListener("click", resetAnalysisUiState);
 }
@@ -1582,8 +2798,12 @@ runButton.addEventListener("click", function () {
     var id = selectedLakeCatchmentId || catchmentSelect.value;
     var start = startDateInput.value;
     var end = endDateInput.value;
+    var aggregation = getSelectedAggregationMode();
     var selectedVariables = getSelectedResultVariables();
     var requestId = currentRequestId + 1;
+    var selectedStartDate = start;
+    var selectedEndDate = end;
+    var aggregationMode = aggregation;
 
     if (!selectedLakeId) {
         setStatus("Please select a lake on the map first.", true);
@@ -1606,23 +2826,42 @@ runButton.addEventListener("click", function () {
     setResetButtonVisible(false);
     burnedAreaOverlayData = null;
     temperatureOverlayData = null;
+    aodOverlayData = null;
     lakesGeoJsonData = null;
     removeBurnedAreaOverlay();
     removeTemperatureOverlay();
+    removeAodOverlay();
     removeLakesLayer();
     updateQuickStats(null);
     setStatus("Loading analysis results...", false);
     console.log("Selected lake_id:", selectedLakeId, "Selected catchment_id:", id);
+    logTemporalDebug("query_request", {
+        lakeId: selectedLakeId,
+        catchmentId: id,
+        selectedStartDate: selectedStartDate,
+        selectedEndDate: selectedEndDate,
+        aggregationMode: aggregationMode,
+        selectedVariables: selectedVariables
+    });
 
-    var queryUrl = "http://127.0.0.1:5000/query?" + new URLSearchParams({
+    var queryUrl = buildApiUrl("/query?" + new URLSearchParams({
         catchment_id: id,
+        lake_id: selectedLakeId || "",
         start_date: start,
         end_date: end,
-        variables: selectedVariables.join(",")
-    }).toString();
+        aggregation: aggregation,
+        variables: selectedVariables.join(","),
+        _ts: String(Date.now())
+    }).toString());
+    logTemporalDebug("query_url", {
+        selectedStartDate: selectedStartDate,
+        selectedEndDate: selectedEndDate,
+        aggregationMode: aggregationMode,
+        queryUrl: queryUrl
+    });
 
     Promise.all([
-        fetch(queryUrl)
+        fetch(queryUrl, { cache: "no-store" })
             .then(function (res) {
                 if (!res.ok) {
                     return res.json()
@@ -1635,7 +2874,7 @@ runButton.addEventListener("click", function () {
                 }
                 return res.json();
             }),
-        fetch("http://127.0.0.1:5000/lakes?catchment_id=" + encodeURIComponent(id))
+        fetch(buildApiUrl("/lakes?catchment_id=" + encodeURIComponent(id)))
             .then(function (res) {
                 if (!res.ok) {
                     return res.json()
@@ -1659,10 +2898,34 @@ runButton.addEventListener("click", function () {
             var records = Array.isArray(payload) ? payload : (payload.records || []);
             var overlay = Array.isArray(payload) ? null : payload.overlay;
             var temperatureOverlayPayload = Array.isArray(payload) ? null : payload.temperature_overlay;
+            var aodOverlayPayload = Array.isArray(payload) ? null : payload.aod_overlay;
+            var chlaOverlayPayload = Array.isArray(payload) ? null : payload.chla_overlay;
+            var lswtOverlayPayload = Array.isArray(payload) ? null : payload.lswt_overlay;
+            var tsmOverlayPayload = Array.isArray(payload) ? null : payload.tsm_overlay;
             var requestedVariables = Array.isArray(payload) ? selectedVariables : (payload.selected_variables || selectedVariables);
+            lastRequestedAggregation = Array.isArray(payload) ? aggregation : (payload.aggregation || aggregation);
             var summary = Array.isArray(payload) ? null : payload.summary;
 
-            renderResults(records, overlay, temperatureOverlayPayload, lakesData, summary, requestedVariables);
+            logTemporalDebug("raw_payload", {
+                requestStartDate: start,
+                requestEndDate: end,
+                aggregation: lastRequestedAggregation,
+                payloadRecords: records,
+                payload: payload
+            });
+
+            renderResults(
+                records,
+                overlay,
+                temperatureOverlayPayload,
+                aodOverlayPayload,
+                chlaOverlayPayload,
+                lswtOverlayPayload,
+                tsmOverlayPayload,
+                lakesData,
+                summary,
+                requestedVariables
+            );
             exportButton.disabled = !records.length;
             highlightCatchment(id);
             setStatus("Analysis complete.", false);
@@ -1737,6 +3000,7 @@ applySelectedResultVariableView({
     syncOverlays: false
 });
 updateQuickStats(null);
+loadAoiBounds();
 loadCatchmentsGeoJSON();
 loadLakesOverview().catch(function (error) {
     console.error("Lakes overview ERROR:", error);
