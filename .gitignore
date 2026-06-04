@@ -5,6 +5,9 @@ __pycache__/
 # Data (too heavy)
 data/
 outputs/
+!deploy/render_demo/backend/outputs/
+deploy/render_demo/backend/outputs/*
+!deploy/render_demo/backend/outputs/final_dataset.csv
 
 # System files
 .DS_Store
