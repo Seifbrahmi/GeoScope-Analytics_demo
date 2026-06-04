@@ -728,10 +728,10 @@ function getHoverStyle(feature) {
 
 function getSelectedStyle(feature) {
     return {
-        color: "#ff916b",
-        weight: 3,
+        color: "#fff4d6",
+        weight: 5,
         fillColor: getCatchmentFillColor(feature),
-        fillOpacity: 0.84
+        fillOpacity: 0
     };
 }
 
@@ -793,13 +793,15 @@ function showSelectedCatchment(feature, shouldFitBounds) {
         pane: "selectedCatchmentPane",
         style: function () {
             return {
-                color: "#ff916b",
-                weight: 3,
+                color: "#fff4d6",
+                weight: 5,
                 fillColor: getCatchmentFillColor(feature),
-                fillOpacity: 0.16
+                fillOpacity: 0
             };
         }
     }).addTo(map);
+
+    selectedCatchmentLayer.bringToFront();
 
     syncLandcoverLegend();
 
